@@ -29,13 +29,27 @@ for row in table.find_all("tr"):
     if "th" in row.find_all():
         continue
     # Extract the name, distance, and time from the row
-    cells = row.find_all("td")
-    name = cells[0].get_text().strip()
-    distance = cells[0].get_text().strip()
-    time = cells[0].get_text().strip()
-    names.append(name)
-    distances.append(distance)
-    times.append(time)
+    
+        cells = row.find_all("td")
+        name = cells[0].get_text().strip()
+
+        if cells[1] != null:
+            distance = cells[1].get_text().strip()
+        if cells[2] != null:
+            time = cells[2].get_text().strip()
+        else:
+            distance = null
+            time = null
+
+        
+
+        
+       
+        names.append(name)
+        distances.append(distance)
+        times.append(time)
+
+    
 
 # Create a CSV file and write the names, distances, and times to it
 with open("athletes.csv", mode="w", newline="") as file:
