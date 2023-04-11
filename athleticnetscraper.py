@@ -21,7 +21,7 @@ table
 
 
 # Extract the names, distances, and times from the table
-names = []
+
 distances = []
 times = []
 for row in table.find_all("tr"):
@@ -30,24 +30,21 @@ for row in table.find_all("tr"):
         continue
     # Extract the name, distance, and time from the row
     
-        cells = row.find_all("td")
-        name = cells[0].get_text().strip()
-
-        if cells[1] != null:
-            distance = cells[1].get_text().strip()
-        if cells[2] != null:
-            time = cells[2].get_text().strip()
-        else:
-            distance = null
-            time = null
-
-        
-
-        
-       
-        names.append(name)
+    cells = row.find_all("td")
+   
+    if len(cells) > 2:
+        for i in range(1, len(cells), 2):
+            distance = cells[0].get_text().strip()
+            time = cells[1].get_text().strip() 
+            distances.append(distance)
+            times.append(time)
+    else:
+        distance = cells[0].get_text().strip()
+        time = cells[0].get_text().strip()
         distances.append(distance)
         times.append(time)
+  
+    
 
     
 
@@ -55,5 +52,5 @@ for row in table.find_all("tr"):
 with open("athletes.csv", mode="w", newline="") as file:
     writer = csv.writer(file)
     writer.writerow(["Name", "Distance", "Time"])
-    for i in range(len(names)):
-        writer.writerow([names[i], distances[i], times[i]])
+    for i in range(len(distances)):
+        writer.writerow([distances[i], times[i]])
