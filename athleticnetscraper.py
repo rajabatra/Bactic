@@ -33,7 +33,7 @@ for row in table.find_all("tr"):
     cells = row.find_all("td")
    
     if len(cells) > 2:
-        for i in range(1, len(cells), 2):
+        for i in range(1, len(cells), 3):
             distance = cells[0].get_text().strip()
             time = cells[1].get_text().strip() 
             distances.append(distance)
@@ -51,6 +51,6 @@ for row in table.find_all("tr"):
 # Create a CSV file and write the names, distances, and times to it
 with open("athletes.csv", mode="w", newline="") as file:
     writer = csv.writer(file)
-    writer.writerow(["Name", "Distance", "Time"])
+    writer.writerow(["Person/Distance", "Time"])
     for i in range(len(distances)):
         writer.writerow([distances[i], times[i]])
