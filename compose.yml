@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres
     restart: always
     environment:
       - POSTGRES_DB=bactic
@@ -12,6 +12,11 @@ services:
       - '5432:5432'
     volumes:
       - db:/var/lib/postgreqsl/data
-  volumes:
-    db:
-      driver: local
+  backend:
+    build: src/bactic-backend
+
+volumes:
+  db:
+    driver: local
+
+configs:
