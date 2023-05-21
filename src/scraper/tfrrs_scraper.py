@@ -1,18 +1,32 @@
 from bs4 import BeautifulSoup as bs
-import re, queue, datetime, os, requests, psycopg2, random
+from sqlalchemy import create_engine
+import re, queue, datetime, os, requests, random, sched, time, asyncio, logging
 
-postgres_pass = os.environ['POSTGRES_PASSWORD']
+# scrape all of the meets occurring in the past day from tfrrs.org/results.rss
+
+
+# initialize connection
+# dbname = os.getenv("POSTGRES_DB")
+# dbuser = os.getenv("POSTGRES_USER")
+# dbpass = os.getenv("POSTGRES_PASSWORD")
+# dbhost = os.getenv("POSTGRES_HOST")
+
+# db_string = 'postgresql://{}:{}@{}:{}/{}'.format('postgres', 'pass', 'bactic_backend', '5432', 'bactic')
+# db = create_engine(db_string)
 
 n_requests = int(1e3)
 
-# initialize database connection
-db = psycopg2.connect(f'dbname=bactic user=postgres password={postgres_pass}')
-cur = db.cursor()
+# all the regexes we want to use
+regex = {
+    'meet_results': re.compile('https://www.tfrrs.org/results/(\d+)'),
+    'meet_date': re.compile('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})')
+}
+
+# duration of one day in seconds
+DAY = 20*60*60
+
 
 # we have some logic here that can be the general framework for our scraping strategy
-
-# create some sort of request randomization scheme
-request_intervals_sec = [100*random.random() for _ in range(n_requests)]
 
 # here we need to determine whether we go by team or by meet
 
@@ -34,30 +48,57 @@ def parse_date(date_str):
         mon = date_parsed[0]
         date = int(date_parsed[1]) 
         return datetime.datetime.strptime(f'{yr:04}-{mon}-{date:02}', '%Y-%B-%d')
+    
+async def scrape_meet(url):
+    # scrape relevant information from url
+    meet = requests.get(url, headers=headers)
 
-# root tfrrs call
-root = requests.get('https://www.tfrrs.org/results.rss', headers=headers)
+    meet = bs(meet.content, features='xml')
+    events = meet.find_all('div', {'class': 'row'})
+    
+    for ev in events[:1]:
+        name = ev.h3.text
+        for result in ev.tbody:
+            pl = result.td
+            person = result.a['href']
+            perf = result.find_all('td')[4]
 
-# all the regexes we want to use
-regex = {
-    'meet_results': re.compile('https://www.tfrrs.org/results/(\d+)'),
-    'meet_date': re.compile('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})')
-}
 
-# a queue to keep track of data that we intend to eventually scrape
-pending_scrapes = queue.PriorityQueue()
 
-root = bs(root.content, features='xml')
-for meet in root.rss.channel.find_all('item', recursive=False):
-    title = meet.title.string
-    date = parse_date(meet.description.string)
-    url = meet.link.string
-    id = regex['meet_results'].findall(url)[0]
-    # insert into database
-    cur.execute("INSERT INTO TABLE meets(id, name, date) VALUES(%s, %s)", (id, title, date))
 
-def scrape_meet(url):
-    pass
+
+    async with lock:
+        # add all future scrapes to the queue
+        pass 
+
+def scrape_root(deadline):
+    # root tfrrs call
+    root = requests.get('https://www.tfrrs.org/results.rss', headers=headers)
+    # schedule scraping events according to a uniform distribution over the time to scraping the next rss feed
+
+    root = bs(root.content, features='xml')
+    for meet in root.rss.channel.find_all('item', recursive=False):
+        title = meet.title.string
+        date = parse_date(meet.description.string)
+        url = meet.link.string
+        id = regex['meet_results'].findall(url)[0]
+        delay = random.uniform(DAY/24) # start all scraping tasks within an hour of the root scrape
+        pending_scrapes.enter(delay, 1, scrape_meet, url)
+        # insert into database TODO:uncomment when the structure is working!
+        # cur.execute("INSERT INTO TABLE meets(id, name, date) VALUES(%s, %s)", (id, title, date))
+
+
+
+
+pending_scrapes = sched.scheduler(time.time, time.sleep)
+lock = asyncio.Lock()
+
+# main loop
+while True:
+    now = time.time()
+    pending_scrapes.enter(0, 1, scrape_root, now + DAY)
+    time.sleep(DAY)
+    
 
 
     

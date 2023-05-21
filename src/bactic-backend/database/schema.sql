@@ -6,12 +6,15 @@ CREATE TABLE IF NOT EXISTS times(
     place INT NOT NULL
 );
 
+DROP TYPE IF EXISTS sex;
+CREATE TYPE sex as ENUM('male', 'female');
+
 CREATE TABLE IF NOT EXISTS athletes(
     id INT NOT NULL PRIMARY KEY,
     name VARCHAR NOT NULL,
     year INT NOT NULL,
     school_id INT NOT NULL,
-    sex INT NOT NULL
+    sex sex NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS schools(
