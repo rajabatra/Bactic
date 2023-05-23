@@ -1,25 +1,31 @@
 from bs4 import BeautifulSoup as bs
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 import re, queue, datetime, os, requests, random, sched, time, asyncio, logging
+import orm
 
 # scrape all of the meets occurring in the past day from tfrrs.org/results.rss
 
 
 # initialize connection
-# dbname = os.getenv("POSTGRES_DB")
-# dbuser = os.getenv("POSTGRES_USER")
-# dbpass = os.getenv("POSTGRES_PASSWORD")
-# dbhost = os.getenv("POSTGRES_HOST")
+dbname = os.getenv("POSTGRES_DB")
+dbuser = os.getenv("POSTGRES_USER")
+dbpass = os.getenv("POSTGRES_PASSWORD")
+dbhost = os.getenv("POSTGRES_HOST")
 
 # db_string = 'postgresql://{}:{}@{}:{}/{}'.format('postgres', 'pass', 'bactic_backend', '5432', 'bactic')
 # db = create_engine(db_string)
+engine = create_engine(f'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}')
+session = Session(engine)
 
 n_requests = int(1e3)
 
 # all the regexes we want to use
 regex = {
     'meet_results': re.compile('https://www.tfrrs.org/results/(\d+)'),
-    'meet_date': re.compile('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})')
+    'athlete_id': re.compile('https://www.tfrrs.org/athletes/(\d+)'),
+    'meet_date': re.compile('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})'),
+    '5000m': re.compile('5000 Meteres')
 }
 
 # duration of one day in seconds
@@ -48,8 +54,28 @@ def parse_date(date_str):
         mon = date_parsed[0]
         date = int(date_parsed[1]) 
         return datetime.datetime.strptime(f'{yr:04}-{mon}-{date:02}', '%Y-%B-%d')
+
+def insert_athlete(url):
+    """"""
+
+def parse_event(name, body, date):
+    """Parse the event, create corresponding ORM objects and and update the database"""
+    results = []
+    if regex['5000m'].search(name):
+        event = orm.Event(orm.EventType._5000m, date)
+        session.add(event)
+        session.flush()
+        for row in body:
+            pl = row.td[0]
+            time = row.find_all('td')[4]
+            athlete_id = regex['athlete_id'].match(row.a.href).group(1)
+            if not session.get(orm.Athlete, athlete_id):
+                insert_athlete(requests.get(row.a.href, headers=headers))
+            results.append(orm.Result(event.id, athlete_id, time=time, place=pl))
+            
     
 async def scrape_meet(url):
+    """Scrape an entire meet give the root meet page"""
     # scrape relevant information from url
     meet = requests.get(url, headers=headers)
 
@@ -57,14 +83,7 @@ async def scrape_meet(url):
     events = meet.find_all('div', {'class': 'row'})
     
     for ev in events[:1]:
-        name = ev.h3.text
-        for result in ev.tbody:
-            pl = result.td
-            person = result.a['href']
-            perf = result.find_all('td')[4]
-
-
-
+        parse_event(ev.h3.text, ev.tbody)
 
 
     async with lock:
@@ -78,10 +97,10 @@ def scrape_root(deadline):
 
     root = bs(root.content, features='xml')
     for meet in root.rss.channel.find_all('item', recursive=False):
-        title = meet.title.string
-        date = parse_date(meet.description.string)
+        meet_title = meet.title.string
+        meet_date = parse_date(meet.description.string)
         url = meet.link.string
-        id = regex['meet_results'].findall(url)[0]
+        meet_id = regex['meet_results'].match(url).group(1)
         delay = random.uniform(DAY/24) # start all scraping tasks within an hour of the root scrape
         pending_scrapes.enter(delay, 1, scrape_meet, url)
         # insert into database TODO:uncomment when the structure is working!
