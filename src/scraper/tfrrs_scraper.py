@@ -1,35 +1,22 @@
 from bs4 import BeautifulSoup as bs
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-import re, queue, datetime, os, requests, random, sched, time, asyncio, logging
+from enum import Enum
+from typing import List, Tuple
+import re, os, datetime, requests, random, sched, time, asyncio, logging
 import orm
 
 # scrape all of the meets occurring in the past day from tfrrs.org/results.rss
 
 
-# initialize connection
-dbname = os.getenv("POSTGRES_DB")
-dbuser = os.getenv("POSTGRES_USER")
-dbpass = os.getenv("POSTGRES_PASSWORD")
-dbhost = os.getenv("POSTGRES_HOST")
 
-# db_string = 'postgresql://{}:{}@{}:{}/{}'.format('postgres', 'pass', 'bactic_backend', '5432', 'bactic')
-# db = create_engine(db_string)
-engine = create_engine(f'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}')
-session = Session(engine)
-
-n_requests = int(1e3)
-
-# all the regexes we want to use
-regex = {
-    'meet_results': re.compile('https://www.tfrrs.org/results/(\d+)'),
-    'athlete_id': re.compile('https://www.tfrrs.org/athletes/(\d+)'),
-    'meet_date': re.compile('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})'),
-    '5000m': re.compile('5000 Meteres')
-}
 
 # duration of one day in seconds
-DAY = 20*60*60
+
+# enum of all event types
+
+class Event(Enum):
+    _5000m = 0
 
 
 # we have some logic here that can be the general framework for our scraping strategy
@@ -42,48 +29,121 @@ DAY = 20*60*60
 
 # 1. start at latest results page and loop through all of the dates that are the current date
 # For this, it will probably be best to use the rss, as this gives a full list of most recent events. Put the meet name, dates, and id in the database
-headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0'}
+
+def get_bs(url):
+    page = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0'})
+    return bs(page.content, features='lxml')
 
 def parse_date(date_str):
-    date_parsed = regex['meet_date'].findall(date_str)
+    date_parsed = re.findall('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})', date_str)
     if len(date_parsed) == 0:
-        raise ValueError(f'{date_str} cannot be parsed into the regex')
+        raise ValueError(f'The meet date string {date_str} cannot be parsed into the regex')
     elif len(date_parsed) == 1:
         date_parsed = date_parsed[0]
         yr = int(date_parsed[3])
         mon = date_parsed[0]
         date = int(date_parsed[1]) 
-        return datetime.datetime.strptime(f'{yr:04}-{mon}-{date:02}', '%Y-%B-%d')
+        return datetime.datetime.strptime(f'{yr:04}-{mon}-{date:02}', '%Y-%B-%d').date()
+    
+def parse_division(region_str: str) -> orm.Division:
+    if re.search('DIII', region_str):
+        return orm.Division.NCAADIII
+    elif re.search('DII', region_str):
+        return orm.Division.NCAADII
+    elif re.search('DI', region_str):
+        return orm.Division.NCAADI
+    elif re.search('NAIA', region_str):
+        return orm.Division.NAIA
+    else:
+        return None
 
-def insert_athlete(url):
-    """"""
+def parse_time(time: str) -> datetime.timedelta:
+    try:
+        t = datetime.datetime.strptime(time, '%M:%S.%f')
+        return datetime.timedelta(minutes=t.minute, seconds=t.second, microseconds=t.microsecond)
+    except ValueError:
+        try:
+            t = datetime.datetime.strptime(time, '%S.%f')
+            return datetime.timedelta(seconds=t.second, microseconds=t.microsecond)
+        except ValueError:
+            raise ValueError(f'Could not parse the time {time} into one of the two acceptable formats %M:%S.%f or %S.%f')
 
-def parse_event(name, body, date):
-    """Parse the event, create corresponding ORM objects and and update the database"""
-    results = []
-    if regex['5000m'].search(name):
-        event = orm.Event(orm.EventType._5000m, date)
-        session.add(event)
+def check_school(school_url: str, session: Session) -> int:
+    """Provided a url to a school, assert its presence in the database or scrape its information. Return the key once finished."""
+    body = get_bs(school_url)
+    school_name = body.find('h3', {'id': 'team-name'}).contents
+    school = session.get(orm.School, {'name': school_name})
+    if school:
+        return school.id
+
+    divisions = body.find('span', {'class': 'panel-heading-normal-text'})
+    division = None
+    if divisions:
+        for d in divisions:
+            division = parse_division(d.content)
+            if division:
+                break
+
+    # TODO: handle conference scraping, right now we have no search logic for this
+    session.add(orm.School(division, school_name))
+    session.flush()
+    school = session.get(orm.School, {'name': school_name})
+    return school.id
+    
+def check_athlete(id_url: str, sex: orm.Sex, session: Session) -> int:
+    """Check the url for the athlete's name in the database. If not found, create a child to scrape the athlete's relevant information from the url. Return the key once finished."""
+    id = re.match('https://www.tfrrs.org/athletes/(\d+)',id_url).group(1)
+    if not session.get(orm.Athlete, id):
+        body = get_bs(id_url)
+        name = body.find('h3', {'class': 'panel-title large-title'}).contents
+        year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
+        school_url = body.find_all('a')[2].href
+        school_id = check_school(school_url, session)
+        ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
+        session.add(ath)
         session.flush()
-        for row in body:
-            pl = row.td[0]
-            time = row.find_all('td')[4]
-            athlete_id = regex['athlete_id'].match(row.a.href).group(1)
-            if not session.get(orm.Athlete, athlete_id):
-                insert_athlete(requests.get(row.a.href, headers=headers))
-            results.append(orm.Result(event.id, athlete_id, time=time, place=pl))
+    return id
+
+def parse_event_table(event_type: Event, sex: orm.Sex, date: datetime.date, body, session: Session):
+    """Parse the event of a table in meet results"""
+    if event_type == Event._5000m:
+        for row in body.find_all('tr'):
+            cells = row.find_all('td')
+            pl = int(cells[0].get_text())
+            time = parse_time(cells[4].get_text().strip())
+            ath_url = row.a['href']
+            athlete_id = check_athlete(ath_url, sex, session)
+            session.add(orm.Result(athlete_id, Event._5000m, pl, date, time))
+    else:
+        # TODO: message that we have not yet implemented this event
+        pass
+
+def bucket_event(event_title: str) -> Event:
+    """Convert an event title into the event enum"""
+    if re.search('5000 Meters', event_title):
+        return Event._5000m
+    else:
+        raise ValueError(f'The event title {event_title} could not be sorted into an event type')
+    
+
+def parse_event(body, sex: orm.Sex, date: datetime.date, session: Session) -> Tuple[Event, list]:
+    """Parse the event, create corresponding ORM objects and and update the database"""
+    name = body.h3.get_text()
+    table = body.tbody
+    event_type = bucket_event(name)
+
+    return event_type, parse_event_table(event_type, sex, date, table, session)
+    
             
     
-async def scrape_meet(url):
-    """Scrape an entire meet give the root meet page"""
-    # scrape relevant information from url
-    meet = requests.get(url, headers=headers)
+async def scrape_meet(body, session: Session):
+    """Scrape an entire meet given the root meet page"""
 
-    meet = bs(meet.content, features='xml')
-    events = meet.find_all('div', {'class': 'row'})
+    events = body.find_all('div', {'class': 'row'})
+    meet_results = {}
     
-    for ev in events[:1]:
-        parse_event(ev.h3.text, ev.tbody)
+    for ev in events[1:]:
+        ev_type, results = parse_event(ev, session)
 
 
     async with lock:
@@ -92,31 +152,42 @@ async def scrape_meet(url):
 
 def scrape_root(deadline):
     # root tfrrs call
-    root = requests.get('https://www.tfrrs.org/results.rss', headers=headers)
-    # schedule scraping events according to a uniform distribution over the time to scraping the next rss feed
+    root = get_bs('https://www.tfrrs.org/results.rss')
 
-    root = bs(root.content, features='xml')
     for meet in root.rss.channel.find_all('item', recursive=False):
         meet_title = meet.title.string
         meet_date = parse_date(meet.description.string)
         url = meet.link.string
-        meet_id = regex['meet_results'].match(url).group(1)
+        meet_id = re.match('https://www.tfrrs.org/results/(\d+)', url).group(1)
         delay = random.uniform(DAY/24) # start all scraping tasks within an hour of the root scrape
         pending_scrapes.enter(delay, 1, scrape_meet, url)
         # insert into database TODO:uncomment when the structure is working!
         # cur.execute("INSERT INTO TABLE meets(id, name, date) VALUES(%s, %s)", (id, title, date))
 
 
+if __name__ == '__main__':
+
+    n_requests = int(1e3)
+    DAY = 20*60*60
 
 
-pending_scrapes = sched.scheduler(time.time, time.sleep)
-lock = asyncio.Lock()
+    # initialize connection
+    dbname = os.getenv("POSTGRES_DB")
+    dbuser = os.getenv("POSTGRES_USER")
+    dbpass = os.getenv("POSTGRES_PASSWORD")
+    dbhost = os.getenv("POSTGRES_HOST")
 
-# main loop
-while True:
-    now = time.time()
-    pending_scrapes.enter(0, 1, scrape_root, now + DAY)
-    time.sleep(DAY)
+    engine = create_engine(f'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}')
+    session = Session(engine)
+
+    pending_scrapes = sched.scheduler(time.time, time.sleep)
+    lock = asyncio.Lock()
+
+    # main loop
+    while True:
+        now = time.time()
+        pending_scrapes.enter(0, 1, scrape_root, now + DAY)
+        time.sleep(DAY)
     
 
 

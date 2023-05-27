@@ -1,8 +1,9 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import String, ForeignKey, CheckConstraint
 from sqlalchemy.orm import Mapped, DeclarativeBase, relationship, mapped_column
+
 
 class Base(DeclarativeBase):
     pass
@@ -11,20 +12,22 @@ class Sex(Enum):
     MALE = 0
     FEMALE = 1
 
-class EventType(Enum):
-    _100m = 0
-    _200m = 1
-    _400m = 2
-    _800m = 3
-    _1500m = 4
-    _5000m = 5
-    _10000m = 6
-    high_jump = 2
-    
-
 class EventStage(Enum):
     PRELIM = 0
     FINAL = 1
+
+class Division(Enum):
+    NCAADI = 0
+    NCAADII = 1
+    NCAADIII = 2
+    NAIA = 3
+
+class EventType(Enum):
+    _5000m = 0
+    _100m = 1
+    _200m = 2
+    _400m = 3
+    #TODO: add rest of events
 
 class Athlete(Base):
     __tablename__ = "athlete"
@@ -35,13 +38,24 @@ class Athlete(Base):
     school_id = mapped_column(ForeignKey("school.id"))
     sex: Mapped[Sex]
 
+    def __init__(self, name: str, year: int, school_id: int, sex: Sex):
+        self.name = name
+        self.year = year
+        self.school_id = school_id
+        self.sex = sex
+        
 class School(Base):
     __tablename__ = "school"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    division: Mapped[int]
+    division: Mapped[Division]
     name: Mapped[str] = mapped_column(String(30))
     conference: Mapped[Optional[str]] = mapped_column(String(30))
+
+    def __init__(self, division: Division, name: str, conference: str = None):
+        self.division = division
+        self.name = name
+        self.conference = conference
 
 class Meet(Base):
     __tablename__ = "meet"
@@ -53,43 +67,81 @@ class Result(Base):
     __tablename__ = "result"
     id: Mapped[int] = mapped_column(primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    event_type: Mapped[EventType]
-    time: Mapped[Optional[float]] = mapped_column(CheckConstraint("""
-    ((event_type = '_100m' or
-        event_type = '_200m' or
-        event_type = '_400m' or
-        event_type = '_800m' or
-        event_type = '_1500m' or 
-        event_type = '_5000m' or
-        event_type = '_10000m')
-        and time is not null)
-        """))
-    height: Mapped[Optional[float]] = mapped_column(CheckConstraint("""
-    (event_type = 'vault' or
-    event_type = 'jump' or
-    event_type = 'triple_jump or
-    )"""))
+    type: Mapped[EventType]
+    place: Mapped[int]
+    date: Mapped[datetime]
+    time: Mapped[Optional[timedelta]]
+    wind: Mapped[Optional[float]]
+    stage: Mapped[Optional[EventStage]]
 
-    def __init__(self, athlete_id: int, event_id: int, time: float=None, place: int=None, height: float=None, wind: float=None):
+    def __init__(self, athlete_id:int, type: EventType, place: int, date: datetime, time: timedelta = None, wind: float = None, stage: EventStage = None):
         self.athlete_id = athlete_id
-        self.event_id = event_id
+        self.type = type
+        self.place = place
+        self.date = date
+
+        # TODO: add more complex validation logic for individual events
+        # if type in {}
+
+class _100m(Base):
+    __tablename__ = "100m"
+    id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
+    time: Mapped[timedelta]
+    wind: Mapped[float]
+    date: Mapped[datetime]
+    place: Mapped[int]
+    stage: Mapped[Optional[EventStage]]
+
+
+class _200m(Base):
+    __tablename__ = "200m"
+    id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
+    time: Mapped[timedelta]
+    wind: Mapped[float]
+    date: Mapped[datetime]
+    place: Mapped[int]
+    stage: Mapped[Optional[EventStage]]
+
+
+
+class _400m(Base):
+    __tablename__ = "400m"
+    id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
+    time: Mapped[timedelta]
+    date: Mapped[datetime]
+    place: Mapped[int]
+    stage: Mapped[Optional[EventStage]]
+
+
+
+class _800m(Base):
+    __tablename__ = "800m"
+    id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
+    time: Mapped[timedelta]
+    date: Mapped[datetime]
+    place: Mapped[int]
+    stage: Mapped[Optional[EventStage]]
+
+    def __repr__(self) -> str:
+        return f'800m(time:{self.time}, date:{self.date}, place:{self.place})'
+
+class _5000m(Base):
+    __tablename__ = "5000m"
+    id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
+    time: Mapped[timedelta]
+    date: Mapped[datetime]
+    place: Mapped[int]
+
+    def __repr__(self) -> str:
+        return f'5000m(time:{self.time}, date:{self.date}, place:{self.place})'
+    
+    def __init__(self, athlete_id: int, time: timedelta, place: int, date: datetime):
+        self.athlete_id = athlete_id
         self.time = time
         self.place = place
-        self.height = height
-        self.wind = wind
-        
-
-    def __rep__(self):
-        return f'{self.id}, {self.time}, {self.height}'
-
-class Event(Base):
-    __tablename__ = "event"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[EventType]
-    event_stage: Mapped[Optional[EventStage]]
-    date: Mapped[datetime] # just make sure that this is correct
-    
-    def __init__(self, type: EventType, date: datetime, event_stage: EventStage=None):
-        self.type = type
         self.date = date
-        self.event_stage = event_stage
