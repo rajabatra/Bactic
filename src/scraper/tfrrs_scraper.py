@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from enum import Enum
 from typing import List, Tuple
-import re, os, datetime, requests, random, sched, time, asyncio, logging
+import re, os, datetime, requests, random, asyncio, logging, time
 import orm
 
 # scrape all of the meets occurring in the past day from tfrrs.org/results.rss
@@ -68,6 +68,50 @@ def parse_time(time: str) -> datetime.timedelta:
         except ValueError:
             raise ValueError(f'Could not parse the time {time} into one of the two acceptable formats %M:%S.%f or %S.%f')
 
+
+def check_athlete_and_insert(athlete_id_url: str, sex: orm.Sex, session: Session, result: orm.Result, scheduler: sched.scheduler) -> int:
+    # first check if athlete is in the database, if not then schedule the athlete pull with the time insertion
+    athlete_id = re.match('https://www.tfrrs.org/athletes/(\d+)', athlete_id_url).group(1)
+    athlete = session.get(orm.Athlete, athlete_id)
+    if not athlete:
+        scheduled_time = random.uniform(next_day - time.monotonic())
+        
+        scheduler.enter(scheduled_time, 1, populate_athlete)
+
+    result.athlete_id = athlete.id
+    session.add(orm.Result, result)
+
+    # then check if associated 
+def populate_athlete(athlete_url: str, sex: orm.Sex, result: orm.Result, session: Session):
+    body = get_bs(athlete_url)
+    name = body.find('h3', {'class': 'panel-title large-title'}).get_text()
+    year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
+    name = re.findall('^([A-Z\s]+)\n', name)[0]
+    school_name = body.find_all('h3', {'class': 'panel-title'})[1].get_text().strip()
+    print(school_name)
+    school_url = body.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
+    time.sleep(random.uniform(10))
+
+    school_id = check_school(school_url, session)
+
+    session.add(orm.Athlete, orm.Athlete())
+
+def check_athlete(id_url: str, sex: orm.Sex, session: Session) -> int:
+    """Check the url for the athlete's name in the database. If not found, create a child to scrape the athlete's relevant information from the url. Return the key once finished."""
+    id = re.match('https://www.tfrrs.org/athletes/(\d+)',id_url).group(1)
+    if not session.get(orm.Athlete, id):
+        body = get_bs(id_url)
+        name = body.find('h3', {'class': 'panel-title large-title'}).get_text()
+        year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
+        name = re.findall('^([A-Z\s]+)\n', name)[0]
+        school_url = body.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
+        school_id = check_school(school_url, session)
+        ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
+        session.add(ath)
+        session.flush()
+    return id
+
+
 def check_school(school_url: str, session: Session) -> int:
     """Provided a url to a school, assert its presence in the database or scrape its information. Return the key once finished."""
     body = get_bs(school_url)
@@ -90,19 +134,6 @@ def check_school(school_url: str, session: Session) -> int:
     school = session.get(orm.School, {'name': school_name})
     return school.id
     
-def check_athlete(id_url: str, sex: orm.Sex, session: Session) -> int:
-    """Check the url for the athlete's name in the database. If not found, create a child to scrape the athlete's relevant information from the url. Return the key once finished."""
-    id = re.match('https://www.tfrrs.org/athletes/(\d+)',id_url).group(1)
-    if not session.get(orm.Athlete, id):
-        body = get_bs(id_url)
-        name = body.find('h3', {'class': 'panel-title large-title'}).contents
-        year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
-        school_url = body.find_all('a')[2].href
-        school_id = check_school(school_url, session)
-        ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
-        session.add(ath)
-        session.flush()
-    return id
 
 def parse_event_table(event_type: Event, sex: orm.Sex, date: datetime.date, body, session: Session):
     """Parse the event of a table in meet results"""
@@ -150,18 +181,34 @@ async def scrape_meet(body, session: Session):
         # add all future scrapes to the queue
         pass 
 
-def scrape_root(deadline):
+async def scrape_root(deadline, session):
     # root tfrrs call
     root = get_bs('https://www.tfrrs.org/results.rss')
 
+    pending_scrapes = asyncio.TaskGroup()
+
     for meet in root.rss.channel.find_all('item', recursive=False):
         meet_title = meet.title.string
-        meet_date = parse_date(meet.description.string)
-        url = meet.link.string
-        meet_id = re.match('https://www.tfrrs.org/results/(\d+)', url).group(1)
+        try:
+            meet_date = parse_date(meet.description.string)
+        except ValueError as v:
+            logging.error('Meet date parsing error, not inserting into database: %s', v)
+            continue
+        if not meet_title:
+            logging.error(f'Meet title could not be found for {meet}. Not inserting into database')
+            continue
+        
+        try:
+            url = meet.link.string
+            meet_id = re.match('https://www.tfrrs.org/results/(\d+)', url).group(1)
+        except AttributeError as e:
+            logging.error('Unable to parse meet id from url %s due to error %s. Not pulling meet data.', url, e)
+            continue
+
         delay = random.uniform(DAY/24) # start all scraping tasks within an hour of the root scrape
         pending_scrapes.enter(delay, 1, scrape_meet, url)
-        # insert into database TODO:uncomment when the structure is working!
+        pending_scrapes.create
+        session.add(orm.Meet(meet_title, meet_date))
         # cur.execute("INSERT INTO TABLE meets(id, name, date) VALUES(%s, %s)", (id, title, date))
 
 
@@ -177,21 +224,32 @@ if __name__ == '__main__':
     dbpass = os.getenv("POSTGRES_PASSWORD")
     dbhost = os.getenv("POSTGRES_HOST")
 
-    engine = create_engine(f'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}')
-    session = Session(engine)
+    logging.basicConfig(level=logging.INFO)    
 
-    pending_scrapes = sched.scheduler(time.time, time.sleep)
+    try:
+        engine = create_engine(f'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}')
+        session = Session(engine)
+    except Exception as e:
+        logging.fatal('Could not create postgres connection or session for %s', e)
+    logging.info('Created session with host %s in database %s', dbhost, dbname)
+
+    pending_scrapes = asyncio.TaskGroup()
     lock = asyncio.Lock()
 
+
     # main loop
+    logging.info('Starting main scrape loop')
+
     while True:
-        now = time.time()
-        pending_scrapes.enter(0, 1, scrape_root, now + DAY)
-        time.sleep(DAY)
+        try:
+            now = time.time()
+            asyncio.run(scrape_root(now + DAY))
+            time.sleep(DAY)
+        except Exception as e:
+            logging.info('Exiting daily scrape loop and shutting down')
+            break
     
-
-
-    
+    session.close()
 
 
 # 2. Go to the men's and women's events compiled pages

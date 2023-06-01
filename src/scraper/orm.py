@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 from enum import Enum
-from datetime import datetime, timedelta
+import datetime
 from sqlalchemy import String, ForeignKey, CheckConstraint
 from sqlalchemy.orm import Mapped, DeclarativeBase, relationship, mapped_column
 
@@ -61,7 +61,11 @@ class Meet(Base):
     __tablename__ = "meet"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(30))
-    date: Mapped[datetime]
+    date: Mapped[datetime.date]
+
+    def __init__(self, name:str, date:datetime.date):
+        self.name = name
+        self.date = date
 
 class Result(Base):
     __tablename__ = "result"
@@ -69,12 +73,12 @@ class Result(Base):
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
     type: Mapped[EventType]
     place: Mapped[int]
-    date: Mapped[datetime]
-    time: Mapped[Optional[timedelta]]
+    date: Mapped[datetime.date]
+    time: Mapped[Optional[datetime.timedelta]]
     wind: Mapped[Optional[float]]
     stage: Mapped[Optional[EventStage]]
 
-    def __init__(self, athlete_id:int, type: EventType, place: int, date: datetime, time: timedelta = None, wind: float = None, stage: EventStage = None):
+    def __init__(self, athlete_id:int, type: EventType, place: int, date: datetime.date, time: datetime.timedelta = None, wind: float = None, stage: EventStage = None):
         self.athlete_id = athlete_id
         self.type = type
         self.place = place
@@ -87,9 +91,9 @@ class _100m(Base):
     __tablename__ = "100m"
     id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    time: Mapped[timedelta]
+    time: Mapped[datetime.timedelta]
     wind: Mapped[float]
-    date: Mapped[datetime]
+    date: Mapped[datetime.date]
     place: Mapped[int]
     stage: Mapped[Optional[EventStage]]
 
@@ -98,9 +102,9 @@ class _200m(Base):
     __tablename__ = "200m"
     id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    time: Mapped[timedelta]
+    time: Mapped[datetime.timedelta]
     wind: Mapped[float]
-    date: Mapped[datetime]
+    date: Mapped[datetime.date]
     place: Mapped[int]
     stage: Mapped[Optional[EventStage]]
 
@@ -110,8 +114,8 @@ class _400m(Base):
     __tablename__ = "400m"
     id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    time: Mapped[timedelta]
-    date: Mapped[datetime]
+    time: Mapped[datetime.timedelta]
+    date: Mapped[datetime.date]
     place: Mapped[int]
     stage: Mapped[Optional[EventStage]]
 
@@ -121,8 +125,8 @@ class _800m(Base):
     __tablename__ = "800m"
     id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    time: Mapped[timedelta]
-    date: Mapped[datetime]
+    time: Mapped[datetime.timedelta]
+    date: Mapped[datetime.date]
     place: Mapped[int]
     stage: Mapped[Optional[EventStage]]
 
@@ -133,14 +137,14 @@ class _5000m(Base):
     __tablename__ = "5000m"
     id: Mapped[int] = mapped_column(ForeignKey('result.id'), primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey('athlete.id'))
-    time: Mapped[timedelta]
-    date: Mapped[datetime]
+    time: Mapped[datetime.timedelta]
+    date: Mapped[datetime.date]
     place: Mapped[int]
 
     def __repr__(self) -> str:
         return f'5000m(time:{self.time}, date:{self.date}, place:{self.place})'
     
-    def __init__(self, athlete_id: int, time: timedelta, place: int, date: datetime):
+    def __init__(self, athlete_id: int, time: datetime.timedelta, place: int, date: datetime.date):
         self.athlete_id = athlete_id
         self.time = time
         self.place = place
