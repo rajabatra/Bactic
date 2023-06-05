@@ -27,7 +27,26 @@ class EventType(Enum):
     _100m = 1
     _200m = 2
     _400m = 3
-    #TODO: add rest of events
+    _800m = 4
+    _1500m = 5
+    _10000m = 6
+    _110h = 7
+    _400h = 8
+    _3000s = 9
+    _3000m = 20
+    _4x100 = 10
+    _4x400 = 11
+    high_jump = 12
+    vault = 13
+    long_jump = 14
+    triple_jump = 15
+    shot = 16
+    discus = 17
+    hammer = 18
+    jav = 19
+    dec = 21
+    hept = 22
+    _100h = 23
 
 class Athlete(Base):
     __tablename__ = "athlete"
@@ -36,6 +55,7 @@ class Athlete(Base):
     name: Mapped[str] = mapped_column(String(30))
     year: Mapped[int]
     school_id = mapped_column(ForeignKey("school.id"))
+    # school = relationship('School.name', )
     sex: Mapped[Sex]
 
     def __init__(self, name: str, year: int, school_id: int, sex: Sex):
@@ -43,6 +63,9 @@ class Athlete(Base):
         self.year = year
         self.school_id = school_id
         self.sex = sex
+
+    def __repr__(self) -> str:
+        return f'ID: {self.id}, Name: {self.name}, Year: {self.year}, School: {self.school_id}, Sex: {self.sex}'
         
 class School(Base):
     __tablename__ = "school"

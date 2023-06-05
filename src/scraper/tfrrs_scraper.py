@@ -7,46 +7,9 @@ import re, os, datetime, requests, random, asyncio, logging, time
 import orm
 import pandas as pd
 
-# enum of all event types, TODO: put this in orm
-class Event(Enum):
-    _5000m = 0
-    _100m = 1
-    _200m = 2
-    _400m = 3
-    _800m = 4
-    _1500m = 5
-    _10000m = 6
-    _110h = 7
-    _400h = 8
-    _3000s = 9
-    _3000m = 20
-    _4x100 = 10
-    _4x400 = 11
-    high_jump = 12
-    vault = 13
-    long_jump = 14
-    triple_jump = 15
-    shot = 16
-    discus = 17
-    hammer = 18
-    jav = 19
-    dec = 21
-    hept = 22
-    _100h = 23
+field_events = {orm.EventType.high_jump, orm.EventType.vault, orm.EventType.long_jump, orm.EventType.triple_jump, orm.EventType.shot, orm.EventType.discus, orm.EventType.hammer, orm.EventType.jav, orm.EventType._4x100, orm.EventType._4x400, orm.EventType.dec, orm.EventType.hept}
 
-
-field_events = {Event.high_jump, Event.vault, Event.long_jump, Event.triple_jump, Event.shot, Event.discus, Event.hammer, Event.jav, Event._4x100, Event._4x400, Event.dec, Event.hept}
-
-# we have some logic here that can be the general framework for our scraping strategy
-
-# here we need to determine whether we go by team or by meet
-
-# team advantage: we can get entire season performances at one time. With this, we can scrape on demand and will have to worry less about being detected. This seems like it might be a good method of bootstrapping the model.
-
-# performance advantage: we get cross-sectional data of the field through time. The scraping rate doesn't need to be prohibitively fast. However, we will need some way of delineating between athletes with the same names. This seems like it would be the best method in the long-run, however because it gives a framework that can run and update periodically without user supervision.
-
-# 1. start at latest results page and loop through all of the dates that are the current date
-# For this, it will probably be best to use the rss, as this gives a full list of most recent events. Put the meet name, dates, and id in the database
+lock = asyncio.Lock()
 
 def get_bs(url):
     page = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0'})
@@ -88,87 +51,7 @@ def parse_time(time: str) -> float:
         except ValueError:
             raise ValueError(f'Could not parse the time {time} into one of the two acceptable formats %M:%S.%f or %S.%f')
 
-
-def check_athlete_and_insert(athlete_id_url: str, sex: orm.Sex, session: Session, result: orm.Result) -> int:
-    # first check if athlete is in the database, if not then schedule the athlete pull with the time insertion
-    athlete_id = re.match('https://www.tfrrs.org/athletes/(\d+)', athlete_id_url).group(1)
-    athlete = session.get(orm.Athlete, athlete_id)
-    if not athlete:
-        # enter at schedule time
-        pass
-
-    result.athlete_id = athlete.id
-    session.add(orm.Result, result)
-
-    # then check if associated 
-def populate_athlete(athlete_url: str, sex: orm.Sex, result: orm.Result, session: Session):
-    body = get_bs(athlete_url)
-    name = body.find('h3', {'class': 'panel-title large-title'}).get_text()
-    year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
-    name = re.findall('^([A-Z\s]+)\n', name)[0]
-    school_name = body.find_all('h3', {'class': 'panel-title'})[1].get_text().strip()
-    print(school_name)
-    school_url = body.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
-    time.sleep(random.uniform(10))
-
-    school_id = check_school(school_url, session)
-
-    session.add(orm.Athlete, orm.Athlete())
-
-def check_athlete(id_url: str, sex: orm.Sex, session: Session) -> int:
-    """Check the url for the athlete's name in the database. If not found, create a child to scrape the athlete's relevant information from the url. Return the key once finished."""
-    id = re.match('https://www.tfrrs.org/athletes/(\d+)',id_url).group(1)
-    if not session.get(orm.Athlete, id):
-        body = get_bs(id_url)
-        name = body.find('h3', {'class': 'panel-title large-title'}).get_text()
-        year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
-        name = re.findall('^([A-Z\s]+)\n', name)[0]
-        school_url = body.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
-        school_id = check_school(school_url, session)
-        ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
-        session.add(ath)
-        session.flush()
-    return id
-
-
-def check_school(school_url: str, session: Session) -> int:
-    """Provided a url to a school, assert its presence in the database or scrape its information. Return the key once finished."""
-    body = get_bs(school_url)
-    school_name = body.find('h3', {'id': 'team-name'}).contents
-    school = session.get(orm.School, {'name': school_name})
-    if school:
-        return school.id
-
-    divisions = body.find('span', {'class': 'panel-heading-normal-text'})
-    division = None
-    if divisions:
-        for d in divisions:
-            division = parse_division(d.content)
-            if division:
-                break
-
-    # TODO: handle conference scraping, right now we have no search logic for this
-    session.add(orm.School(division, school_name))
-    session.flush()
-    school = session.get(orm.School, {'name': school_name})
-    return school.id
-    
-
-def parse_event_table(event_type: Event, sex: orm.Sex, date: datetime.date, body, session: Session):
-    """Parse the event of a table in meet results"""
-    if event_type == Event._5000m:
-        for row in body.find_all('tr'):
-            cells = row.find_all('td')
-            pl = int(cells[0].get_text())
-            time = parse_time(cells[4].get_text().strip())
-            ath_url = row.a['href']
-            athlete_id = check_athlete(ath_url, sex, session)
-            session.add(orm.Result(athlete_id, Event._5000m, pl, date, time))
-    else:
-        # TODO: message that we have not yet implemented this event
-        pass
-
-def bucket_event(event_title: str) -> Event:
+def bucket_event(event_title: str) -> orm.EventType:
     """Convert an event title into the event enum"""
     # This may be the worst code I have ever written. I don't know any better way of doing this, but if there is, please inform me
 
@@ -182,88 +65,78 @@ def bucket_event(event_title: str) -> Event:
         if distance == 100:
             following = re.search(r'^\d+\s([A-Za-z]+)', event_title).group(1)
             if following == 'Meters':
-                return Event._100m
+                return orm.EventType._100m
             elif following == 'Hurdles':
-                return Event._100h
+                return orm.EventType._100h
             else:
                 raise ValueError(f'Unable to parse 100 event title {event_title}')
         elif distance == 110:
-            return Event._110h
+            return orm.EventType._110h
         elif distance == 200:
-            return Event._200m
+            return orm.EventType._200m
         elif distance == 400:
             following = re.search(r'^\d+\s([A-Za-z]+)', event_title).group(1)
             if following == 'Meters':
-                return Event._400m
+                return orm.EventType._400m
             elif following == 'Hurdles':
-                return Event._400h
+                return orm.EventType._400h
             else:
                 raise ValueError(f'Unable to parse 400 event title {event_title}')
             
         elif distance == 800:
-            return Event._800m
+            return orm.EventType._800m
         elif distance == 1500:
-            return Event._1500m
+            return orm.EventType._1500m
         elif distance == 5000:
-            return Event._5000m
+            return orm.EventType._5000m
         elif distance == 3000:
             following = re.search(r'^\d+\s([A-Za-z]+)', event_title).group(1)
             if following == 'Meters':
-                return Event._3000m
+                return orm.EventType._3000m
             elif following == 'Steeplechase':
-                return Event._3000s
+                return orm.EventType._3000s
             else:
                 raise ValueError(f'Unable to parse 3000 event title {event_title}')
         elif distance == 10000:
-            return Event._10000m
+            return orm.EventType._10000m
         else:
             raise ValueError(f'Parsed a number {distance} that was not in the list of expected distances')
     elif relay:
         distance = int(relay.group(1))
         if distance == 100:
-            return Event._4x100
+            return orm.EventType._4x100
         elif distance == 400:
-            return Event._4x400
+            return orm.EventType._4x400
         else:
             raise ValueError(f'Parsed a number {distance} that was not in the list of expected relay distances')
     elif field:
         event = field.group(0)
         if event == 'Hammer':
-            return Event.hammer
+            return orm.EventType.hammer
         elif event == 'High':
-            return Event.high_jump
+            return orm.EventType.high_jump
         elif event == 'Long':
-            return Event.long_jump
+            return orm.EventType.long_jump
         elif event == 'Triple':
-            return Event.triple_jump
+            return orm.EventType.triple_jump
         elif event == 'Vault':
-            return Event.vault
+            return orm.EventType.vault
         elif event == 'Discus':
-            return Event.discus
+            return orm.EventType.discus
         elif event == 'Javelin':
-            return Event.jav
+            return orm.EventType.jav
         elif event == 'Shot':
-            return Event.shot
+            return orm.EventType.shot
         elif event == 'Decathlon':
-            return Event.dec
+            return orm.EventType.dec
         elif event == 'Heptathlon':
-            return Event.hept
+            return orm.EventType.hept
         else:
             raise ValueError(f'The event title {event} could not be parsed as a field event')
     elif event_title == '10,000 Meters':
-        return Event._10000m
+        return orm.EventType._10000m
     else:
         raise ValueError(f'The event title {event_title} did not contain a numerical prefix')
-
-
-def parse_event(body, sex: orm.Sex, date: datetime.date, session: Session) -> Tuple[Event, list]:
-    """Parse the event, create corresponding ORM objects and and update the database"""
-    name = body.h3.get_text()
-    table = body.tbody
-    event_type = bucket_event(name)
-
-    return event_type, parse_event_table(event_type, sex, date, table, session)
-    
 
 def scrape_meet_page(root: bs) -> pd.DataFrame:
     events = root.find_all('div', {'class': 'row'})
@@ -273,7 +146,7 @@ def scrape_meet_page(root: bs) -> pd.DataFrame:
     for ev in events[1:]:
         event_title = ev.h3
         if not event_title:
-            # this happens when we hit heatwise tables
+            # this happens when we hit heat-wise tables
             continue
 
         event_title = event_title.get_text().strip()
@@ -328,7 +201,7 @@ def scrape_meet(meet_url):
     men_url = re.sub(r'\/(\d+)\/', r'/\1/m/', meet_url)
     men_root = get_bs(men_url)
     # slight random delay between access so we don't do this simultaneously
-    women_url = re.sub(r'\/f\/', r'/w/', men_url)
+    women_url = re.sub(r'\/m\/', r'/f/', men_url)
     time.sleep(random.random()*10)
     women_root = get_bs(women_url)
 
@@ -346,18 +219,73 @@ def scrape_meet(meet_url):
     results['PL'] = pd.to_numeric(results['PL'], downcast='integer')
     results['NAME'] = pd.to_numeric(results['NAME'], downcast='integer')
 
-    return results.set_index(['SEX', 'EVENT', 'PL'])
+    return results.set_index(['NAME', 'EVENT'])
 
-async def delay_scrape(url, session, delay):
+def check_school(school_url: str, session: Session) -> int:
+    """Provided a url to a school, assert its presence in the database or scrape its information. Return the key once finished."""
+    body = get_bs(school_url)
+    school_name = body.find('h3', {'id': 'team-name'}).get_text().strip()
+    with lock:
+        school = session.query(orm.School).filter(orm.School.name == school_name).one_or_none()
+        if school:
+            return school.id
+
+        divisions = body.find('span', {'class': 'panel-heading-normal-text'})
+        division = None
+        if divisions:
+            for d in divisions:
+                division = parse_division(d.get_text())
+                if division:
+                    break
+
+        # TODO: handle conference scraping, right now we have no search logic for this
+        session.add(orm.School(division, school_name))
+        session.flush()
+        school = session.query(orm.School).filter(orm.School.name == school_name).one_or_none()
+    return school.id
+
+async def delay_scrape_athlete_and_school(athlete_id: int, sex: orm.Sex, delay: float, session: Session):
+    await asyncio.sleep(delay)
+
+    athlete_root = get_bs('https://www.tfrrs.org/athletes/' + str(athlete_id))
+
+    name = athlete_root.find('h3', {'class': 'panel-title large-title'}).get_text()
+    year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
+    name = re.findall('^([A-Z\s]+)\n', name)[0]
+    school_url = athlete_root.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
+    school_id = check_school(school_url, session)
+    ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
+    ath.id = athlete_id
+    with lock:
+        session.add(ath)
+        session.flush()
+
+async def delay_scrape(url: str, session: Session, delay: float, deadline: float):
     """Perform all scrape scheduling"""
     await asyncio.sleep(delay)
 
     results = scrape_meet(url)
-    to_scrape = pd.DataFrame()
 
-    for i in results.index:
-        athlete_id = results.loc[i]['NAME']
-        session.get(orm.Athlete, results.loc[i]['NAME'])
+    with asyncio.TaskGroup() as to_scrape:
+        for i in results.index:
+            sex = results[i]['SEX']
+            athlete_id = i[0]
+            with lock:
+                ath = session.get(orm.Athlete, athlete_id)
+            if not ath:
+                delay_scrape = random.random()*(deadline - delay)
+                logging.info(f'Athlete with id {athlete_id} not found. Delaying scrape in {delay_scrape:.2f} seconds')
+                to_scrape(delay_scrape_athlete_and_school(athlete_id, sex, delay_scrape, session))
+
+    with lock:
+        results.to_sql('result', session.connection)
+    
+    try:
+        session.add(results)
+    except Exception as e:
+        logging.error('Failed to add results table')
+
+
         
 
 

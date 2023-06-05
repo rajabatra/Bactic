@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 import datetime
+import asyncio
 import orm
 import unittest
 import os, requests, bs4
@@ -106,18 +107,16 @@ class EventTableParsing(unittest.TestCase):
 class TestCheckAthlete(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.ath = load_and_save('https://www.tfrrs.org/athletes/7917933/Pomona_Pitzer/Lucas_Florsheim.html', tmp_dir)
         cls.engine = create_engine("sqlite://", echo=False)
         orm.Base.metadata.create_all(cls.engine)
 
         cls.session = Session(cls.engine)
         return super().setUpClass()
     
-    def test_check_school(self):
-        tfrrs_scraper.check_school('https://www.tfrrs.org/athletes/7917933/Pomona_Pitzer/Lucas_Florsheim.html')
+    def test_delay_scrape_athlete_and_school(self):
+        asyncio.run(tfrrs_scraper.delay_scrape_athlete_and_school(7917928, orm.Sex.MALE, 0, TestCheckAthlete.session))
+        print(TestCheckAthlete.session.query(orm.Athlete).all())
 
-    def test_check_athlete(self):
-        tfrrs_scraper.check_school('')
     @classmethod
     def tearDownClass(cls) -> None:
         cls.session.close()
