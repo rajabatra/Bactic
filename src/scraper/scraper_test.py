@@ -64,11 +64,11 @@ class TestDivisionParsing(unittest.TestCase):
 class TestTimeParsing(unittest.TestCase):
     def test_parse_time(self):
         time = tfrrs_scraper.parse_time('14:30.69')
-        self.assertEqual(time, datetime.timedelta(0, 60*14 + 30.69))
+        self.assertEqual(time, 14*60+30.69)
     
     def test_parse_time_sub_minute(self):
         time = tfrrs_scraper.parse_time('10.98')
-        self.assertEqual(time, datetime.timedelta(0, 10.98))
+        self.assertEqual(time, 10.98)
     
     def test_parse_time_error_handling(self):
         self.assertRaises(ValueError, tfrrs_scraper.parse_time, '1:02:15.98')
@@ -81,7 +81,7 @@ class TestEventBucketing(unittest.TestCase):
     def bucket_error(self):
         self.assertRaises(ValueError, tfrrs_scraper.bucket_event, "Women's competitive rowing")
 
-class EventTableParsing(unittest.TestCase):
+class DatabaseFunctions(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         meet = load_and_save('https://www.tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships.html', tmp_dir)
@@ -94,8 +94,16 @@ class EventTableParsing(unittest.TestCase):
         cls.session = Session(cls.engine)
         return super().setUpClass()
     
-    def test_parse_event_5k_table(self):
-        tfrrs_scraper.parse_event(EventTableParsing._5k_event_table, orm.Sex.MALE, datetime.datetime(2023, 5, 5).date(), EventTableParsing.session)
+    def test_check_school(self):
+        self.assertEqual(1, asyncio.run(tfrrs_scraper.check_school('https://tfrrs.org/teams/tf/CA_college_m_Pomona_Pitzer.html', DatabaseFunctions.session)))
+    
+    def test_check_athlete(self):
+        asyncio.run(tfrrs_scraper.delay_scrape_athlete_and_school(7917933, orm.Sex.MALE, 1, DatabaseFunctions.session))
+        self.assertEqual(DatabaseFunctions.session.get(orm.Athlete, 7917933).name, 'LUCAS FLORSHEIM')
+        self.assertEqual(DatabaseFunctions.session.get(orm.School, 1).name, 'POMONA-PITZER')
+
+    def test_delay_scrape(self):
+        asyncio.run(tfrrs_scraper.delay_scrape('https://tfrrs.org/results/79700/2023_SCIAC_TF_Championships', DatabaseFunctions.session, 1, 10))
 
     @classmethod
     def tearDownClass(cls) -> None:

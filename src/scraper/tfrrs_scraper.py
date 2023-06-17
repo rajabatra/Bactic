@@ -11,12 +11,12 @@ field_events = {orm.EventType.high_jump, orm.EventType.vault, orm.EventType.long
 
 lock = asyncio.Lock()
 
-def get_bs(url):
+def get_bs(url, features='lxml'):
     page = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/10.0'})
-    return bs(page.content, features='lxml')
+    return bs(page.content, features=features)
 
 def parse_date(date_str):
-    date_parsed = re.findall('([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})', date_str)
+    date_parsed = re.findall(r'([a-zA-Z]+)\s*(\d+)(\s*-\s*\d+)?,\s*(\d{4})', date_str)
     if len(date_parsed) == 0:
         raise ValueError(f'The meet date string {date_str} cannot be parsed into the regex')
     elif len(date_parsed) == 1:
@@ -221,11 +221,11 @@ def scrape_meet(meet_url):
 
     return results.set_index(['NAME', 'EVENT'])
 
-def check_school(school_url: str, session: Session) -> int:
+async def check_school(school_url: str, session: Session) -> int:
     """Provided a url to a school, assert its presence in the database or scrape its information. Return the key once finished."""
     body = get_bs(school_url)
     school_name = body.find('h3', {'id': 'team-name'}).get_text().strip()
-    with lock:
+    async with lock:
         school = session.query(orm.School).filter(orm.School.name == school_name).one_or_none()
         if school:
             return school.id
@@ -245,39 +245,52 @@ def check_school(school_url: str, session: Session) -> int:
     return school.id
 
 async def delay_scrape_athlete_and_school(athlete_id: int, sex: orm.Sex, delay: float, session: Session):
+    async with lock:
+        if session.get(orm.Athlete, athlete_id):
+            return
+        
+    print(f'starting scrape for {athlete_id} with delay {delay}')
     await asyncio.sleep(delay)
 
     athlete_root = get_bs('https://www.tfrrs.org/athletes/' + str(athlete_id))
 
     name = athlete_root.find('h3', {'class': 'panel-title large-title'}).get_text()
     year = re.findall('\([A-Z]{2}-(\d)\)', name)[0]
-    name = re.findall('^([A-Z\s]+)\n', name)[0]
+    try:
+        name = re.findall(r"^([A-Z\P{L}\s'-]+)\n", name)[0]
+    except IndexError as e:
+        print(f'there was an error finding the name of {athlete_id}')
     school_url = athlete_root.find_all('a', {'class': 'underline-hover-white pl-0 panel-actions'})[1]['href']
-    school_id = check_school(school_url, session)
+    school_id = await check_school(school_url, session)
     ath = orm.Athlete(name=name, year=year, school_id=school_id, sex=sex)
     ath.id = athlete_id
-    with lock:
-        session.add(ath)
-        session.flush()
 
-async def delay_scrape(url: str, session: Session, delay: float, deadline: float):
+    async with lock:
+        if session.get(orm.Athlete, athlete_id):
+            return
+        session.add(ath)            
+        session.flush()
+    print(f'finished scrape for athlete {athlete_id} with name {ath.name}')
+
+async def delay_scrape(url: str, session: Session, start_delay: float, deadline: float):
     """Perform all scrape scheduling"""
-    await asyncio.sleep(delay)
+    await asyncio.sleep(start_delay)
 
     results = scrape_meet(url)
 
-    with asyncio.TaskGroup() as to_scrape:
-        for i in results.index:
-            sex = results[i]['SEX']
-            athlete_id = i[0]
-            with lock:
+    async with asyncio.TaskGroup() as to_scrape:
+        for index, row in results.iterrows():
+            logging.debug('test')
+            sex = row['SEX']
+            athlete_id = index[0]
+            async with lock:
                 ath = session.get(orm.Athlete, athlete_id)
             if not ath:
-                delay_scrape = random.random()*(deadline - delay)
+                delay_scrape = random.random()*(deadline - start_delay)
                 logging.info(f'Athlete with id {athlete_id} not found. Delaying scrape in {delay_scrape:.2f} seconds')
-                to_scrape(delay_scrape_athlete_and_school(athlete_id, sex, delay_scrape, session))
+                to_scrape.create_task(delay_scrape_athlete_and_school(athlete_id, sex, delay_scrape, session))
 
-    with lock:
+    async with lock:
         results.to_sql('result', session.connection)
     
     try:
@@ -292,10 +305,10 @@ async def delay_scrape(url: str, session: Session, delay: float, deadline: float
 
 
 async def scrape_root(deadline, session):
-    # root tfrrs call
-    root = get_bs('https://www.tfrrs.org/results.rss')
+    # root tfrrs call, on an xml sheet
+    root = get_bs('https://www.tfrrs.org/results.rss', 'xml')
 
-    with asyncio.TaskGroup() as pending_scrapes:
+    async with asyncio.TaskGroup() as pending_scrapes:
         for meet in root.rss.channel.find_all('item', recursive=False):
             meet_title = meet.title.string
             try:
@@ -315,7 +328,7 @@ async def scrape_root(deadline, session):
                 continue
 
             delay = random.uniform(0, DAY/24) # start all scraping tasks within an hour of the root scrape
-            pending_scrapes.create(delay_scrape(url, session, delay))
+            pending_scrapes.create_task(delay_scrape(url, session, delay, deadline))
             logging.info('Starting the scrape of %s in %s seconds', meet_title, delay)
             session.add(orm.Meet(meet_title, meet_date))
 
@@ -349,7 +362,6 @@ if __name__ == '__main__':
             now = time.time()
             asyncio.run(scrape_root(now + DAY, session))
         except Exception as e:
-            logging.info('Exiting daily scrape loop and shutting down')
-            break
-    
-    session.close()
+            session.close()
+            logging.info('Exiting daily scrape loop and shutting down due to error')
+            raise e
