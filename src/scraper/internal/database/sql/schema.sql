@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS school(
     id BIGINT PRIMARY KEY,
     name VARCHAR,
     division TINYINT,
-    conference VARCHAR
+    conference VARCHAR,
+    url VARCHAR NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS meet(

@@ -1,4 +1,4 @@
-package scrapers
+package tfrrs
 
 import (
 	"errors"
@@ -25,25 +25,45 @@ func parse_date(date string) (time.Time, error) {
 }
 
 func parse_division(region string) int {
-	switch region {
-	case "DIII":
-		return internal.DIII
-	case "DII":
-		return internal.DII
-	case "DI":
-		return internal.DI
-	case "NAIA":
-		return internal.NAIA
-	default:
-		return -1
+	match, err := regexp.MatchString("DIII", region)
+	if err != nil {
+		panic("Regexp error")
 	}
+	if match {
+		return internal.DIII
+	}
+	if err != nil {
+		panic("Regexp error")
+	}
+	match, err = regexp.MatchString("DII", region)
+	if match {
+		return internal.DII
+	}
+	if err != nil {
+		panic("Regexp error")
+	}
+	match, err = regexp.MatchString("DI", region)
+	if match {
+		return internal.DI
+	}
+	if err != nil {
+		panic("Regexp error")
+	}
+	match, err = regexp.MatchString("NAIA", region)
+	if match {
+		return internal.NAIA
+	}
+	if err != nil {
+		panic("Regexp error")
+	}
+	return -1
 }
 
 // For parsing integers, handles the case where we have a trailing dot from the regexp capture group
 func parseInt64(value string) int64 {
 
 	// strip the leading dot or colon
-	if len(value) > 0 && value[len(value)-1] == '.' || value[len(value)-1] == ':' {
+	if len(value) > 0 && (value[len(value)-1] == '.' || value[len(value)-1] == ':') {
 		value = value[:len(value)-1]
 	}
 
@@ -61,6 +81,9 @@ func parseTime(t string) (float32, error) {
 	} else {
 		time_regexp := regexp.MustCompile(`(\d+:)?(\d+).(\d+)`)
 		matches := time_regexp.FindStringSubmatch(t)
+		if len(matches) != 4 {
+			return 0.0, errors.New("Time could not be parsed into expected format string: t")
+		}
 		minutes := parseInt64(matches[1])
 		seconds := parseInt64(matches[2])
 		millis := parseInt64(matches[3])
@@ -125,13 +148,13 @@ type ParseResult struct {
 func parseResultTable(resultTable [][]string, logger *log.Logger) ([]internal.Result, uint8) {
 	eventType, err := parseEvent(resultTable[0][0])
 	if err != nil {
-		logger.Print("Unable to parse event title", err)
+		logger.Printf("Unable to parse event title: %s", err)
 		return []internal.Result{}, 0
 	}
 
 	ret := make([]internal.Result, 0, len(resultTable)-1)
 
-	for i := 1; i <= len(resultTable); i++ {
+	for i := 1; i < len(resultTable); i++ {
 		result, err := parseResultRow(resultTable[i], eventType)
 		if err != nil {
 			logger.Print("Unable to parse event row", err)
@@ -144,34 +167,37 @@ func parseResultTable(resultTable [][]string, logger *log.Logger) ([]internal.Re
 }
 
 func parseDistanceResult(row []string) (internal.Result, error) {
-	place, err := strconv.Atoi(row[0])
-	if err != nil {
-		return internal.Result{}, fmt.Errorf("Unable to parse place string %e", err)
+	if len(row) < 5 {
+		return internal.Result{}, fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
 	}
 
-	athleteID, err := strconv.Atoi(row[1])
-	if err != nil {
-		return internal.Result{}, fmt.Errorf("Unable to parse athlete id string %e", err)
-	}
-
-	time, err := parseTime(row[3])
+	time, err := parseTime(row[4])
 	if err != nil {
 		return internal.Result{}, err
 	}
 
 	return internal.Result{
-		AthleteID: uint32(athleteID),
-		Place:     uint8(place),
-		Quantity:  time,
+		Quantity: time,
 	}, nil
 }
 
 func parseSprintsResult(row []string) (internal.Result, error) {
-	return internal.Result{}, errors.New("Spring result parser not yet implemented")
+	if len(row) < 5 {
+		return internal.Result{}, fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
+	}
+
+	time, err := parseTime(row[4])
+	if err != nil {
+		return internal.Result{}, err
+	}
+
+	return internal.Result{
+		Quantity: time,
+	}, nil
 }
 
 func notImplementedResult(row []string) (internal.Result, error) {
-	return internal.Result{}, errors.New("Spring result parser not yet implemented")
+	return internal.Result{}, errors.New("This result parser not yet implemented")
 }
 
 var parseResultClass = map[uint8](func([]string) (internal.Result, error)){
@@ -226,43 +252,115 @@ func parseResultRow(resultRow []string, resultType uint8) (internal.Result, erro
 
 type TFRRSParser *colly.Collector
 
-func NewTFRRSCollector(db *database.BacticDB, logger *log.Logger) TFRRSParser {
-	schoolCollector := colly.NewCollector()
-	athleteCollector := colly.NewCollector()
-	meetCollector := colly.NewCollector()
+func NewTFRRSCollector(db *database.BacticDB) TFRRSParser {
 	rootCollector := colly.NewCollector()
 
-    // setup collector
-    setupMeetCollector(meetCollector, athleteCollector, schoolCollector, db, logger)
+	// setup single-page scraper
+	meetCollector := NewMeetCollector(db)
 
+	// Setup the rss feed scraper
+	setupRootCollector(rootCollector, meetCollector, db)
 	return rootCollector
 }
 
-func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticDB, logger *log.Logger) {
+func setupRootCollector(rootCollector *colly.Collector, meetCollector *colly.Collector, db *database.BacticDB) {
+	logger := log.Default()
+	logger.SetPrefix("XML Root Collector")
+
+	rootCollector.OnRequest(func(r *colly.Request) {
+		logger.Println("Root collector looking at meet RSS", r.URL)
+	})
+
+	rootCollector.OnXML("//item", func(x *colly.XMLElement) {
+		//TODO: parsing for root node
+	})
 }
 
-func setupAthleteCollector(athleteCollector *colly.Collector, schoolCollector *colly.Collector, db *database.BacticDB, logger *log.Logger) {
-    setupSchoolCollector(schoolCollector, db, logger)
+func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticDB) {
+	logger := log.Default()
+	logger.SetPrefix("School Collector")
 
-    athleteCollector.OnRequest(func (r *colly.Request ) {
-        logger.Println("Athlete collector visiting athlete", r.URL)
-    })
+	schoolCollector.OnRequest(func(r *colly.Request) {
+		logger.Println("School collector visiting school", r.URL)
+	})
 
-    athleteCollector.OnHTML("h3.panel-title.large-title", func (e *colly.HTMLElement) {
-        // what info do we need?
-        athName := e.Text
-        schoolNameNode := e.DOM.Parent().Siblings().SiblingsMatcher("a.underline-hover-white.pl-0.panel-actions")
-        schoolNameURL, exists := schoolNameNode.Attr("href")
-        if exists == false {
-        }
-        
+	schoolCollector.OnHTML("h3#team-name", func(h *colly.HTMLElement) {
+		teamName := h.Text
+		division := -1
+		var conference string
+		h.DOM.Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
+			d := parse_division(s.Text())
+			if division >= 0 && d >= 0 && division != d {
+				logger.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
+			} else if d >= 0 {
+				division = d
+			}
 
-    })
+			conf, err := regexp.MatchString("conference", strings.ToLower(s.Text()))
+			if err != nil {
+				logger.Fatalf("Error with coneference search regexp")
+			} else if conf {
+				conference = s.Text()
+			}
+		})
+
+		if division < 0 {
+			logger.Println("Could not parse a division from the school page")
+		}
+
+		if len(conference) == 0 {
+			logger.Println("Could not find a conference on the school page")
+		}
+
+		school := internal.School{
+			Name:       teamName,
+			URL:        h.Request.URL.RequestURI(),
+			Division:   division,
+			Conference: conference,
+		}
+		db.InsertSchool(school)
+	})
 }
 
-func setupMeetCollector(meetCollector *colly.Collector, athleteCollector *colly.Collector, schoolCollector *colly.Collector, db *database.BacticDB, logger *log.Logger) {
-    //recursively setup athlete collector
-    setupAthleteCollector(athleteCollector, schoolCollector, db, logger)
+func setupAthleteCollector(athleteCollector *colly.Collector, db *database.BacticDB) {
+	logger := log.Default()
+	logger.SetPrefix("Athlete Collector")
+
+	athleteCollector.OnRequest(func(r *colly.Request) {
+		logger.Println("Athlete collector visiting athlete", r.URL)
+	})
+
+	athleteCollector.OnHTML("h3.panel-title.large-title", func(e *colly.HTMLElement) {
+		// what info do we need?
+		athName := e.Text
+		schoolNameNode := e.DOM.Parent().SiblingsFiltered("a.underline-hover-white.pl-0.panel-actions")
+		schoolNameURL, exists := schoolNameNode.Attr("href")
+		if exists == false {
+			logger.Fatal("Could not find the href attribute in the athlete title line")
+		}
+		school, found := db.GetSchoolURL(schoolNameURL)
+		if !found {
+			logger.Fatal("School not found, we should be able to find it:", schoolNameURL)
+		}
+		ath := internal.Athlete{
+			ID:       school.ID,
+			Name:     athName,
+			SchoolID: school.ID,
+		}
+		db.InsertAthlete(ath)
+	})
+}
+
+func NewMeetCollector(db *database.BacticDB) *colly.Collector {
+
+	logger := log.Default()
+	logger.SetPrefix("Meet Collector")
+
+	meetCollector := colly.NewCollector()
+	schoolCollector := colly.NewCollector()
+	athleteCollector := colly.NewCollector()
+	setupAthleteCollector(athleteCollector, db)
+	setupSchoolCollector(schoolCollector, db)
 
 	meetCollector.OnRequest(func(r *colly.Request) {
 		logger.Println("Visiting meet", r.URL)
@@ -270,18 +368,19 @@ func setupMeetCollector(meetCollector *colly.Collector, athleteCollector *colly.
 
 	meetCollector.OnHTML("div.row", func(e *colly.HTMLElement) {
 		resultsRows := e.DOM.Find("tbody>tr")
-		table_length := resultsRows.Length()
-		if table_length == 0 {
+		tableLength := resultsRows.Length()
+		if tableLength == 0 {
 			return
 		}
 
 		row_length := resultsRows.First().Children().Length()
-		table := make([][]string, table_length+1)
+		table := make([][]string, tableLength+1)
 
 		table[0] = []string{strings.TrimSpace(strings.Replace(e.ChildText("h3"), "\n", " ", -1))}
 		whitespaceReplace := regexp.MustCompile(`\s\s+`)
 
 		athleteURLs := make(map[uint32]string)
+		schoolURLs := make([]string, 0, tableLength)
 		// Collect into table struct
 		resultsRows.Each(func(i int, s *goquery.Selection) {
 			table[i+1] = make([]string, row_length)
@@ -290,13 +389,20 @@ func setupMeetCollector(meetCollector *colly.Collector, athleteCollector *colly.
 				// strip the athlete id, which we use to identify athletes
 				if j == 1 {
 					athleteURL, _ := r.Children().Attr("href")
-					athleteRegexp := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`)
-					athleteID, err := strconv.Atoi(athleteRegexp.FindStringSubmatch(athleteURL)[1])
-                    if err != nil {
-                        logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
-                    }
+					findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
+					if len(findID) < 2 {
+						logger.Fatalf("athlete url could not be searched for an id: %s", athleteURL)
+					}
+					athleteID, err := strconv.Atoi(findID[1])
+					if err != nil {
+						logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
+					}
 					athleteURLs[uint32(athleteID)] = athleteURL
-					table[i+1][j] = string(athleteID)
+					table[i+1][j] = fmt.Sprint(athleteID)
+				} else if j == 3 {
+                    url, _ := r.Children().Attr("href")
+                    schoolURLs = append(schoolURLs, url)
+                    table[i+1][j] = strings.TrimSpace(r.Children().Text())
 				} else {
 					table[i+1][j] = strings.TrimSpace(whitespaceReplace.ReplaceAllString(r.Text(), " "))
 				}
@@ -306,9 +412,19 @@ func setupMeetCollector(meetCollector *colly.Collector, athleteCollector *colly.
 		// parse all information from table
 		resultTable, eventType := parseResultTable(table, logger)
 		athletesToScrape := db.GetMissingAthletes(resultTable)
+		schoolsToScrape := db.GetMissingSchools(schoolURLs)
+
+        // visit schools before athletes due to the database relation dependencies
+        for _, url := range schoolsToScrape {
+            schoolCollector.Visit(url)
+        }
+
 		for _, athleteID := range athletesToScrape {
-			meetCollector.Visit(athleteURLs[athleteID])
+			athleteCollector.Visit(athleteURLs[athleteID])
 		}
 
+        // once this is done, we can insert the heat
+		db.InsertHeat(eventType, 1, resultTable)
 	})
+	return meetCollector
 }

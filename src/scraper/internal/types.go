@@ -123,6 +123,7 @@ type School struct {
 	ID         uint32
 	Name       string
 	Division   int
+	URL        string
 	Conference string
 }
 

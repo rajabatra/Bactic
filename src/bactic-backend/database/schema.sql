@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS schools(
     id INT NOT NULL PRIMARY KEY,
     division INT NOT NULL,
     name VARCHAR NOT NULL,
+    url VARCHAR NOT NULL,
     conference VARCHAR 
 );
 
