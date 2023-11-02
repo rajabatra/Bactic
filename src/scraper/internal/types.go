@@ -102,7 +102,6 @@ type Result struct {
 	AthleteID uint32
 	Type      uint8
 	Place     uint8
-	Date      time.Time
 	// Either time in seconds or meters for distance respective of the event type
 	Quantity float32
 	WindMS   float32
@@ -115,16 +114,17 @@ func (m *Result) String() string {
 }
 
 type Heat struct {
-	ID   uint32
-	Type int
+	ID     uint32
+	Type   int
+	MeetID uint32
 }
 
 type School struct {
-	ID         uint32
-	Name       string
-	Division   int
-	URL        string
-	Conference string
+	ID       uint32
+	Name     string
+	Division int
+	URL      string
+	Leagues  []string
 }
 
 type Meet struct {
@@ -134,7 +134,7 @@ type Meet struct {
 }
 
 type Athlete struct {
-	ID       uint32
-	Name     string
-	SchoolID uint32
+	ID      uint32
+	Name    string
+	Schools []uint32 // athelete can be part of multiple schools
 }

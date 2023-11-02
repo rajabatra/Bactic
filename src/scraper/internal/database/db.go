@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"scraper/internal"
@@ -78,53 +79,166 @@ func (db *BacticDB) GetCrawls(results []internal.Result) []uint32 {
 }
 
 func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
-	row := db.DBConn.QueryRow("SELECT id, name, school_id FROM athlete WHERE id = ?", athID)
+	row := db.DBConn.QueryRow("SELECT id, name FROM athlete WHERE id = ?", athID)
 	var athlete internal.Athlete
-	err := row.Scan(&athlete.ID, &athlete.Name, &athlete.SchoolID)
+	err := row.Scan(&athlete.ID, &athlete.Name)
 	if err == sql.ErrNoRows {
 		return athlete, false
 	} else if err != nil {
 		log.Fatal("Unable to unmarshal Athlete selection from sql database", err)
 	}
+
+	rows, err := db.DBConn.Query("SELECT school_id FROM athlete_in_school WHERE athlete_id = ?", athID)
+	if err != nil && err != sql.ErrNoRows {
+		log.Fatal("Query to athlete-school-relation table failed", err)
+	}
+	var schools []uint32
+	var school uint32
+	for rows.Next() {
+		err = row.Scan(&school)
+		if err == sql.ErrNoRows {
+			break
+		} else if err != nil {
+			log.Fatal("Unable to unmarshal school id", err)
+		}
+		schools = append(schools, school)
+	}
+	athlete.Schools = schools
+
 	return athlete, true
 }
 
 func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
-	row := db.DBConn.QueryRow("SELECT id, name, division, conference FROM school WHERE id = ?", schoolID)
+	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE id = ?", schoolID)
 	var school internal.School
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if row.Err() != nil {
 		panic(row.Err())
-	} else {
-		row.Scan(&school.ID, &school.Name, &school.Division, &school.Conference)
-		return school, true
 	}
+
+	row.Scan(&school.ID, &school.Name, &school.Division)
+	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	if row.Err() == sql.ErrNoRows {
+		return school, false
+	} else if err != nil {
+		panic(err)
+	}
+
+	var league string
+	var l []string
+	for leagues.Next() {
+		leagues.Scan(&league)
+		l = append(l, league)
+	}
+	school.Leagues = l
+	return school, true
 }
 
 func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
-	row := db.DBConn.QueryRow("SELECT id, name, division, conference FROM school WHERE url = ?", schoolURL)
 	var school internal.School
+	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE url = ?", schoolURL)
 
-	err := row.Scan(&school.ID, &school.Name, &school.Division, &school.Conference)
+	err := row.Scan(&school.ID, &school.Name, &school.Division)
 	if err == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
-		panic(err) // determine if this is valid behavior. I believe it is
+		panic(err)
 	}
+
+	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	if err == sql.ErrNoRows {
+		return school, true
+	} else if err != nil {
+		panic(err)
+	}
+
+	var league string
+	var l []string
+	for leagues.Next() {
+		leagues.Scan(&league)
+		l = append(l, league)
+	}
+	school.Leagues = l
 	return school, true
 }
 
 func (db *BacticDB) InsertAthlete(ath internal.Athlete) error {
 	// We asume that the athlete's id has already been populated by the tfrrs id
-	_, err := db.DBConn.Exec("INSERT INTO athlete(id, name, school_id) values(?, ?, ?)", ath.ID, ath.Name, ath.SchoolID)
+	_, err := db.DBConn.Exec("INSERT INTO athlete(id, name) VALUES(?, ?)", ath.ID, ath.Name)
+	if err != nil {
+		return err
+	}
+	for _, schoolID := range ath.Schools {
+		err = db.AddAthleteToSchool(ath.ID, schoolID)
+		if err != nil {
+			return fmt.Errorf("Error creating athlete school relation: %s", err)
+		}
+	}
+
+	return nil
+}
+
+func (db *BacticDB) GetAthlete(athID uint32) (internal.Athlete, bool) {
+	row := db.DBConn.QueryRow("SELECT name FROM athlete WHERE id = ?", athID)
+	var ath internal.Athlete
+	if row.Err() == sql.ErrNoRows {
+		return ath, false
+	}
+	err := row.Scan(&ath.Name)
+	if err != nil {
+		panic(err)
+	}
+	ath.ID = athID
+	return ath, true
+}
+
+func (db *BacticDB) AddAthleteToSchool(athID uint32, schoolID uint32) error {
+
+	row := db.DBConn.QueryRow("SELECT * from athlete_in_school WHERE school_id = ? and athlete_id = ?", schoolID, athID)
+	err := row.Scan()
+	if err == sql.ErrNoRows {
+		_, err := db.DBConn.Exec("INSERT INTO athlete_in_school(athlete_id, school_id) VALUES(?, ?)", athID, schoolID)
+		return err
+	}
+
 	return err
+	//row := db.DBConn.QueryRow("SELECT * FROM athlete_in_school WHERE athlete_id = ? AND school_id = ?", athID, schoolID)
+	//if row.Err() != nil && row.Err() != sql.ErrNoRows {
+	//	log.Fatal("Threw unexpected error ", row.Err())
+	//	return nil
+	//} else if row.Err() == sql.ErrNoRows {
+	//	log.Println("Could not find any rows, adding to table")
+	//	_, err := db.DBConn.Exec("INSERT INTO athlete_in_school(athlete_id, school_id) VALUES(?, ?)", athID, schoolID)
+	//	return err
+	//} else {
+	//	log.Println("Row already exists")
+	//	return nil
+	//}
 }
 
 func (db *BacticDB) InsertSchool(school internal.School) (uint32, error) {
 	id := uuid.New().ID()
 	school.ID = id
-	_, err := db.DBConn.Exec("INSERT INTO school(id, name, division, conference, url) values(?, ?, ?, ?, ?)", school.ID, school.Name, school.Division, school.Conference, school.URL)
+	cur, err := db.DBConn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	_, err = cur.Exec("INSERT INTO school(id, name, division, url) VALUES(?, ?, ?, ?)", school.ID, school.Name, school.Division, school.URL)
+	if err != nil {
+		cur.Rollback()
+		return 0, err
+	}
+
+	for _, league := range school.Leagues {
+		_, err := cur.Exec("INSERT INTO league(school_id, league_name) VALUES(?, ?)", school.ID, league)
+		if err != nil {
+			cur.Rollback()
+			return 0, err
+		}
+	}
+
+	err = cur.Commit()
 	if err != nil {
 		return 0, err
 	} else {
@@ -132,16 +246,15 @@ func (db *BacticDB) InsertSchool(school internal.School) (uint32, error) {
 	}
 }
 
-func (db *BacticDB) insertResult(result internal.Result) error {
+func insertResult(cur *sql.Tx, result internal.Result) error {
 	id := uuid.New().ID()
 	result.ID = id
-	_, err := db.DBConn.Exec(`INSERT INTO result(id, heat_id, ath_id, event_type, pl, date, 
-        quant, wind_ms, stage) values(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := cur.Exec(`INSERT INTO result(id, heat_id, ath_id, pl, 
+        quant, wind_ms, stage) VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		result.ID,
 		result.HeatID,
 		result.AthleteID,
 		result.Place,
-		result.Date,
 		result.Quantity,
 		result.WindMS,
 		result.Stage)
@@ -149,21 +262,36 @@ func (db *BacticDB) insertResult(result internal.Result) error {
 }
 
 // We should process inserts heat-by-heat, since that is how the data is scraped
-func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []internal.Result) {
+func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []internal.Result) (uint32, error) {
 	// check to see if athlete exists
 	heatID := uuid.New().ID()
-	_, err := db.DBConn.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES(?, ?, ?)", heatID, meetID, eventType)
+	cur, err := db.DBConn.Begin()
 	if err != nil {
-		db.logger.Println("Error thrown from attempt to create heat:", err)
+		return 0, err
+	}
+	_, err = cur.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES(?, ?, ?)", heatID, meetID, eventType)
+	if err != nil {
+		cur.Rollback()
+		return 0, fmt.Errorf("Could not create heat table: %s", err)
 	}
 
 	// check to see that all schools are in the database
 
 	for _, result := range results {
-		err = db.insertResult(result)
+		result.HeatID = heatID
+		err = insertResult(cur, result)
 		if err != nil {
-			db.logger.Println("Error when attempting to insert result into heat:", err)
+			cur.Rollback()
+			return 0, fmt.Errorf("Could not insert result: %s", err)
 		}
+	}
+
+	err = cur.Commit()
+	if err != nil {
+		cur.Rollback()
+		return 0, fmt.Errorf("Could not commit table insert: %s", err)
+	} else {
+		return heatID, nil
 	}
 }
 
@@ -177,6 +305,11 @@ func (db *BacticDB) GetMissingAthletes(results []internal.Result) []uint32 {
 		}
 	}
 	return missingID
+}
+
+func (db *BacticDB) InsertMeet(meet internal.Meet) error {
+	_, err := db.DBConn.Exec("INSERT INTO meet(id, name, date) VALUES(?, ?, ?)", meet.ID, meet.Name, meet.Date)
+	return err
 }
 
 // For a list of school URLs, return a list of those for which there are no matches

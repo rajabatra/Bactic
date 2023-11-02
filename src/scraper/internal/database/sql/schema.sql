@@ -1,8 +1,7 @@
 CREATE TABLE IF NOT EXISTS athlete(
     id BIGINT PRIMARY KEY,
     name VARCHAR,
-    school_id BIGINT,
-    FOREIGN KEY(school_id) REFERENCES school(id)
+    year INT
 );
 
 CREATE TABLE IF NOT EXISTS result(
@@ -28,7 +27,6 @@ CREATE TABLE IF NOT EXISTS school(
     id BIGINT PRIMARY KEY,
     name VARCHAR,
     division TINYINT,
-    conference VARCHAR,
     url VARCHAR NOT NULL UNIQUE
 );
 
@@ -36,4 +34,18 @@ CREATE TABLE IF NOT EXISTS meet(
     id BIGINT PRIMARY KEY,
     name VARCHAR,
     date DATE
+);
+
+CREATE TABLE IF NOT EXISTS league(
+    school_id BIGINT NOT NULL,
+    league_name VARCHAR NOT NULL,
+    FOREIGN KEY(school_id) REFERENCES school(id)
+);
+
+CREATE TABLE IF NOT EXISTS athlete_in_school(
+    athlete_id BIGINT NOT NULL,
+    school_id BIGINT NOT NULL,
+    FOREIGN KEY(athlete_id) REFERENCES athlete(id),
+    FOREIGN KEY(school_id) REFERENCES school(id),
+    PRIMARY KEY(athlete_id, school_id)
 );

@@ -14,7 +14,10 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
+	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Parse a date string in the tfrrs website format
@@ -145,17 +148,11 @@ type ParseResult struct {
 	err    error
 }
 
-func parseResultTable(resultTable [][]string, logger *log.Logger) ([]internal.Result, uint8) {
-	eventType, err := parseEvent(resultTable[0][0])
-	if err != nil {
-		logger.Printf("Unable to parse event title: %s", err)
-		return []internal.Result{}, 0
-	}
+func parseResultTable(resultTable [][]string, logger *log.Logger, eventType uint8) ([]internal.Result, uint8) {
+	ret := make([]internal.Result, 0, len(resultTable))
 
-	ret := make([]internal.Result, 0, len(resultTable)-1)
-
-	for i := 1; i < len(resultTable); i++ {
-		result, err := parseResultRow(resultTable[i], eventType)
+	for _, row := range resultTable {
+		result, err := parseResultRow(row, eventType)
 		if err != nil {
 			logger.Print("Unable to parse event row", err)
 		} else {
@@ -256,7 +253,8 @@ func NewTFRRSCollector(db *database.BacticDB) TFRRSParser {
 	rootCollector := colly.NewCollector()
 
 	// setup single-page scraper
-	meetCollector := NewMeetCollector(db)
+	meetID := uuid.New().ID()
+	meetCollector := NewMeetCollector(db, meetID)
 
 	// Setup the rss feed scraper
 	setupRootCollector(rootCollector, meetCollector, db)
@@ -285,40 +283,35 @@ func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticD
 	})
 
 	schoolCollector.OnHTML("h3#team-name", func(h *colly.HTMLElement) {
-		teamName := h.Text
+		titleCaser := cases.Title(language.AmericanEnglish)
+		teamName := titleCaser.String(strings.TrimSpace(h.Text))
 		division := -1
-		var conference string
-		h.DOM.Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
+		var leagues []string
+		h.DOM.Parent().Siblings().First().Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
 			d := parse_division(s.Text())
 			if division >= 0 && d >= 0 && division != d {
 				logger.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
 			} else if d >= 0 {
 				division = d
-			}
-
-			conf, err := regexp.MatchString("conference", strings.ToLower(s.Text()))
-			if err != nil {
-				logger.Fatalf("Error with coneference search regexp")
-			} else if conf {
-				conference = s.Text()
+			} else {
+				leagues = append(leagues, strings.TrimSpace(s.Text()))
 			}
 		})
 
 		if division < 0 {
-			logger.Println("Could not parse a division from the school page")
-		}
-
-		if len(conference) == 0 {
-			logger.Println("Could not find a conference on the school page")
+			logger.Println("Could not parse a division from the school page", teamName)
 		}
 
 		school := internal.School{
-			Name:       teamName,
-			URL:        h.Request.URL.RequestURI(),
-			Division:   division,
-			Conference: conference,
+			Name:     teamName,
+			URL:      h.Request.URL.String(),
+			Division: division,
+			Leagues:  leagues,
 		}
-		db.InsertSchool(school)
+        _, err := db.InsertSchool(school)
+        if err != nil {
+            logger.Fatal("Error inserting school", err)
+        }
 	})
 }
 
@@ -332,26 +325,43 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 
 	athleteCollector.OnHTML("h3.panel-title.large-title", func(e *colly.HTMLElement) {
 		// what info do we need?
-		athName := e.Text
-		schoolNameNode := e.DOM.Parent().SiblingsFiltered("a.underline-hover-white.pl-0.panel-actions")
-		schoolNameURL, exists := schoolNameNode.Attr("href")
-		if exists == false {
-			logger.Fatal("Could not find the href attribute in the athlete title line")
+		c := cases.Title(language.AmericanEnglish)
+		athName := c.String(strings.Split(strings.TrimSpace(e.Text), "\n")[0])
+
+		// Currently, school is not a foreign key meaning it does not need to be populated on this scrape
+
+		// schoolNameNode := e.DOM.Parent().Siblings().Next()
+		// schoolNameURL, exists := schoolNameNode.Attr("href")
+		// if exists == false {
+		// 	logger.Fatal("Could not find the href attribute in the athlete title line")
+		// }
+		//schoolNameURL = strings.TrimSpace(schoolNameURL)
+		//school, found := db.GetSchoolURL(schoolNameURL)
+		//if !found {
+		//    schoolCollector.Visit(schoolNameURL)
+
+		//	logger.Fatal("School not found, we should be able to find it:", schoolNameURL)
+		//}
+
+        athleteURL := e.Request.URL.String()
+		findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
+		if len(findID) < 2 {
+			logger.Fatalf("athlete url could not be searched for an id: %s", athleteURL)
 		}
-		school, found := db.GetSchoolURL(schoolNameURL)
-		if !found {
-			logger.Fatal("School not found, we should be able to find it:", schoolNameURL)
+		athleteID, err := strconv.Atoi(findID[1])
+		if err != nil {
+			logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
 		}
+
 		ath := internal.Athlete{
-			ID:       school.ID,
-			Name:     athName,
-			SchoolID: school.ID,
+			ID:      uint32(athleteID),
+			Name:    athName,
 		}
 		db.InsertAthlete(ath)
 	})
 }
 
-func NewMeetCollector(db *database.BacticDB) *colly.Collector {
+func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 
 	logger := log.Default()
 	logger.SetPrefix("Meet Collector")
@@ -373,17 +383,24 @@ func NewMeetCollector(db *database.BacticDB) *colly.Collector {
 			return
 		}
 
-		row_length := resultsRows.First().Children().Length()
-		table := make([][]string, tableLength+1)
+		// the header should be present under other circumstances
+		eventType, err := parseEvent(e.DOM.Find("div.custom-table-title>h3").Text())
+		if err != nil {
+			logger.Println("Unable to parse this table type. Assuming a redundant heat table:", err)
+			return
+		}
 
-		table[0] = []string{strings.TrimSpace(strings.Replace(e.ChildText("h3"), "\n", " ", -1))}
+		rowLength := resultsRows.First().Children().Length()
+		table := make([][]string, tableLength)
+
 		whitespaceReplace := regexp.MustCompile(`\s\s+`)
 
 		athleteURLs := make(map[uint32]string)
 		schoolURLs := make([]string, 0, tableLength)
+        athleteIDs := make([]uint32, 0, tableLength)
 		// Collect into table struct
 		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i+1] = make([]string, row_length)
+			table[i] = make([]string, rowLength)
 			s.Children().Each(func(j int, r *goquery.Selection) {
 
 				// strip the athlete id, which we use to identify athletes
@@ -398,33 +415,43 @@ func NewMeetCollector(db *database.BacticDB) *colly.Collector {
 						logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
 					}
 					athleteURLs[uint32(athleteID)] = athleteURL
-					table[i+1][j] = fmt.Sprint(athleteID)
+                    athleteIDs = append(athleteIDs, uint32(athleteID))
+					table[i][j] = fmt.Sprint(athleteID)
 				} else if j == 3 {
-                    url, _ := r.Children().Attr("href")
+					url, _ := r.Children().Attr("href")
                     schoolURLs = append(schoolURLs, url)
-                    table[i+1][j] = strings.TrimSpace(r.Children().Text())
+					table[i][j] = strings.TrimSpace(r.Children().Text())
 				} else {
-					table[i+1][j] = strings.TrimSpace(whitespaceReplace.ReplaceAllString(r.Text(), " "))
+					table[i][j] = strings.TrimSpace(whitespaceReplace.ReplaceAllString(r.Text(), " "))
 				}
 			})
 		})
 
 		// parse all information from table
-		resultTable, eventType := parseResultTable(table, logger)
+		resultTable, eventType := parseResultTable(table, logger, eventType)
 		athletesToScrape := db.GetMissingAthletes(resultTable)
 		schoolsToScrape := db.GetMissingSchools(schoolURLs)
 
-        // visit schools before athletes due to the database relation dependencies
-        for _, url := range schoolsToScrape {
-            schoolCollector.Visit(url)
-        }
+		// visit schools before athletes due to the database relation dependencies
+		for _, url := range schoolsToScrape {
+			schoolCollector.Visit(url)
+		}
 
 		for _, athleteID := range athletesToScrape {
 			athleteCollector.Visit(athleteURLs[athleteID])
 		}
 
-        // once this is done, we can insert the heat
-		db.InsertHeat(eventType, 1, resultTable)
+        // TODO: populate the athlete-school relations
+        for i, url := range schoolURLs {
+            school, found := db.GetSchoolURL(url)
+            if !found {
+                logger.Fatal("We must be able to find the school", url)
+            }
+            db.AddAthleteToSchool(athleteIDs[i], school.ID)
+        }
+
+		// once this is done, we can insert the heat
+		db.InsertHeat(eventType, meetID, resultTable)
 	})
 	return meetCollector
 }

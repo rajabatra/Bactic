@@ -1,34 +1,41 @@
 package database_test
 
 import (
-	"os"
 	"scraper/internal"
 	"scraper/internal/database"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var db *database.BacticDB
-
-func TestMain(m *testing.M) {
-	db = database.NewBacticDB("sqlite3", ":memory:")
+func setupDummyDB() *database.BacticDB {
+    db := database.NewBacticDB("sqlite3", ":memory:")
 	_, err := db.DBConn.Exec("PRAGMA foreign_keys = ON")
 	if err != nil {
 		panic(err)
 	}
-
 	db.SetupSchema()
+	return db
+}
 
-	output := m.Run()
+func TestTables(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 
-	db.TeardownSchema()
-	os.Exit(output)
+	_, err := db.DBConn.Exec("INSERT INTO school(id, name, division, url) VALUES(?, ?, ?, ?)", 2, "school", 3, "abcdef")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = db.DBConn.Exec("INSERT INTO league(school_id, league_name) VALUES(?, ?)", 2, "test")
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func TestGetMissingAthletes(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 	heat := []internal.Result{
 		{
 			ID:        123,
@@ -55,7 +62,25 @@ func TestGetMissingAthletes(t *testing.T) {
 	}
 }
 
+func TestInsertSchools(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
+	school := internal.School{
+		Leagues:  []string{"League"},
+		Name:     "School",
+		Division: internal.DIII,
+		URL:      "https://www.tfrrs.org/school_a",
+	}
+
+	_, err := db.InsertSchool(school)
+	if err != nil {
+		t.Error("Unexpected failure to insert:", err)
+	}
+}
+
 func TestGetMissingSchools(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 	schools := []string{"School1", "School2", "School3"}
 
 	missing := db.GetMissingSchools(schools)
@@ -69,49 +94,29 @@ func TestGetMissingSchools(t *testing.T) {
 	}
 }
 
-func TestViolateForeignKey(t *testing.T) {
-	ath := internal.Athlete{
-		ID:       123,
-		Name:     "Name",
-		SchoolID: 456,
-	}
-	err := db.InsertAthlete(ath)
-	if err == nil {
-		t.Error("This should violate the foreign key constraint: ", err)
-	}
-}
-
 func TestInsertAthlete(t *testing.T) {
-	school := internal.School{
-		Conference: "Conference",
-		Name:       "School",
-		Division:   internal.DIII,
-		URL:        "https://www.tfrrs.org/school_a",
-	}
-
-	school_id, err := db.InsertSchool(school)
-	if err != nil {
-		t.Error("Unexpected failure to school insert: ", err)
-	}
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 	ath := internal.Athlete{
-		ID:       5,
-		Name:     "Freddy Fasgi",
-		SchoolID: school_id,
+		ID:   5,
+		Name: "Freddy Fasgi",
 	}
 
-	err = db.InsertAthlete(ath)
+	err := db.InsertAthlete(ath)
 	if err != nil {
 		t.Error("Insert athlete failed, expected success:", err)
 	}
 }
 
 func TestGetSchoolURL(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 	url := "https://www.tfrrs.org/school_b"
 	school := internal.School{
-		Conference: "Conference",
-		Name:       "School",
-		Division:   internal.DIII,
-		URL:        url,
+		Leagues:  []string{"League1", "League2"},
+		Name:     "School",
+		Division: internal.DIII,
+		URL:      url,
 	}
 
 	school_id, err := db.InsertSchool(school)
@@ -130,11 +135,13 @@ func TestGetSchoolURL(t *testing.T) {
 }
 
 func TestGetSchool(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
 	school := internal.School{
-		Conference: "Conference",
-		Name:       "School",
-		Division:   internal.DIII,
-		URL:        "https://www.tfrrs.org/school_c",
+		Leagues:  []string{"Conference", "League2"},
+		Name:     "School",
+		Division: internal.DIII,
+		URL:      "https://www.tfrrs.org/school_c",
 	}
 
 	school_id, err := db.InsertSchool(school)
@@ -149,29 +156,105 @@ func TestGetSchool(t *testing.T) {
 
 	school.URL = ""
 	school.ID = school_id
-	if school_ret != school {
+	if school_ret.ID != school.ID {
 		t.Errorf("Returned school did not match fields with the inserted value")
 	}
 }
 
 func TestInsertHeat(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
+	ath1 := internal.Athlete{
+		Name: "Ath1",
+		ID:   123,
+	}
+	ath2 := internal.Athlete{
+		Name: "Ath2",
+		ID:   456,
+	}
+	err := db.InsertAthlete(ath1)
+	if err != nil {
+		t.Error("Failed to insert ath1", err)
+	}
+	err = db.InsertAthlete(ath2)
+	if err != nil {
+		t.Error("Failed to insert ath2", err)
+	}
+
 	heat := []internal.Result{
 		{
 			AthleteID: 123,
-			HeatID:    1,
 			Quantity:  14*60 + 1.29, // Me
 			Place:     11,
-			Date:      time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 		},
 		{AthleteID: 456,
-			HeatID:   1,
 			Quantity: 14*60 + 1.73, // Jack Rosencrans
 			Place:    12,
-			Date:     time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
-    id := uuid.New().ID()
+	meet := internal.Meet{
+		ID:   1234,
+		Name: "Bactic Championships",
+		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
+	}
 
-    db.InsertHeat(internal.T5000M, id, heat)
+	err = db.InsertMeet(meet)
+	if err != nil {
+		t.Error("Failed to insert preliminary meet", err)
+	}
+
+	_, err = db.InsertHeat(internal.T5000M, meet.ID, heat)
+	if err != nil {
+		t.Error("Insert heat operation failed:", err)
+	}
+}
+func TestAthleteSchoolRelation(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
+	ath1 := internal.Athlete{
+		Name: "Ath1",
+		ID:   123,
+	}
+	ath2 := internal.Athlete{
+		Name: "Ath2",
+		ID:   456,
+	}
+	err := db.InsertAthlete(ath1)
+	if err != nil {
+		t.Error("Failed to insert ath1", err)
+	}
+	err = db.InsertAthlete(ath2)
+	if err != nil {
+		t.Error("Failed to insert ath2", err)
+	}
+
+	school := internal.School{
+		Leagues:  []string{"League"},
+		Name:     "School",
+		Division: internal.DIII,
+		URL:      "https://www.tfrrs.org/school_a",
+	}
+
+	school.ID, err = db.InsertSchool(school)
+	if err != nil {
+		t.Error("Unexpected failure to insert:", err)
+	}
+
+	err = db.AddAthleteToSchool(ath1.ID, school.ID)
+}
+
+func TestInsertMeet(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
+	meet := internal.Meet{
+		ID:   1234,
+		Name: "Bactic Championships",
+		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
+	}
+
+	err := db.InsertMeet(meet)
+	if err != nil {
+		t.Error("Insert meet operation failed", err)
+	}
 }
