@@ -89,6 +89,7 @@ func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
 	}
 
 	rows, err := db.DBConn.Query("SELECT school_id FROM athlete_in_school WHERE athlete_id = ?", athID)
+	defer rows.Close()
 	if err != nil && err != sql.ErrNoRows {
 		log.Fatal("Query to athlete-school-relation table failed", err)
 	}
@@ -119,6 +120,7 @@ func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
 
 	row.Scan(&school.ID, &school.Name, &school.Division)
 	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	defer leagues.Close()
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
@@ -147,6 +149,7 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 	}
 
 	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	defer leagues.Close()
 	if err == sql.ErrNoRows {
 		return school, true
 	} else if err != nil {
@@ -164,7 +167,7 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 }
 
 func (db *BacticDB) InsertAthlete(ath internal.Athlete) error {
-	// We asume that the athlete's id has already been populated by the tfrrs id
+	// We assume that the athlete's id has already been populated by the tfrrs id
 	_, err := db.DBConn.Exec("INSERT INTO athlete(id, name) VALUES(?, ?)", ath.ID, ath.Name)
 	if err != nil {
 		return err
@@ -194,15 +197,12 @@ func (db *BacticDB) GetAthlete(athID uint32) (internal.Athlete, bool) {
 }
 
 func (db *BacticDB) AddAthleteToSchool(athID uint32, schoolID uint32) error {
-
-	row := db.DBConn.QueryRow("SELECT * from athlete_in_school WHERE school_id = ? and athlete_id = ?", schoolID, athID)
-	err := row.Scan()
-	if err == sql.ErrNoRows {
+	row := db.DBConn.QueryRow("SELECT school_id from athlete_in_school WHERE school_id = ? and athlete_id = ?", schoolID, athID)
+	if err := row.Scan(); err == sql.ErrNoRows {
 		_, err := db.DBConn.Exec("INSERT INTO athlete_in_school(athlete_id, school_id) VALUES(?, ?)", athID, schoolID)
 		return err
 	}
-
-	return err
+	return nil
 	//row := db.DBConn.QueryRow("SELECT * FROM athlete_in_school WHERE athlete_id = ? AND school_id = ?", athID, schoolID)
 	//if row.Err() != nil && row.Err() != sql.ErrNoRows {
 	//	log.Fatal("Threw unexpected error ", row.Err())
@@ -238,8 +238,7 @@ func (db *BacticDB) InsertSchool(school internal.School) (uint32, error) {
 		}
 	}
 
-	err = cur.Commit()
-	if err != nil {
+	if err = cur.Commit(); err != nil {
 		return 0, err
 	} else {
 		return id, nil
@@ -279,15 +278,13 @@ func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []interna
 
 	for _, result := range results {
 		result.HeatID = heatID
-		err = insertResult(cur, result)
-		if err != nil {
+		if err = insertResult(cur, result); err != nil {
 			cur.Rollback()
 			return 0, fmt.Errorf("Could not insert result: %s", err)
 		}
 	}
 
-	err = cur.Commit()
-	if err != nil {
+	if err = cur.Commit(); err != nil {
 		cur.Rollback()
 		return 0, fmt.Errorf("Could not commit table insert: %s", err)
 	} else {

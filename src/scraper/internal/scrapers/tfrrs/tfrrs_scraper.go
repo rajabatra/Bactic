@@ -112,6 +112,7 @@ var titleToEventEnum = map[string]uint8{
 	"3000 steeplechase": internal.T3000S,
 	"3000 meters":       internal.T3000M,
 	"4 x 100m relay":    internal.T4X100,
+	"4 x 100 relay":     internal.T4X100,
 	"4 x 400 relay":     internal.T4X400,
 	"high jump":         internal.HIGH_JUMP,
 	"pole vault":        internal.VAULT,
@@ -154,7 +155,7 @@ func parseResultTable(resultTable [][]string, logger *log.Logger, eventType uint
 	for _, row := range resultTable {
 		result, err := parseResultRow(row, eventType)
 		if err != nil {
-			logger.Print("Unable to parse event row", err)
+			logger.Printf("Unable to parse event row: %s. Ignoring", row)
 		} else {
 			ret = append(ret, result)
 		}
@@ -228,13 +229,13 @@ func parseResultRow(resultRow []string, resultType uint8) (internal.Result, erro
 	place, err := strconv.Atoi(resultRow[0])
 	if err != nil {
 		return internal.Result{},
-			fmt.Errorf("Unable to parse place string %e", err)
+			fmt.Errorf("Unable to parse place string %s", resultRow[0])
 	}
 
 	athleteID, err := strconv.Atoi(resultRow[1])
 	if err != nil {
 		return internal.Result{},
-			fmt.Errorf("Unable to parse parse athlete id string %e", err)
+			fmt.Errorf("Unable to parse parse athlete id string %v", err)
 	}
 
 	row, err := parseResultClass[resultType](resultRow)
@@ -308,10 +309,10 @@ func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticD
 			Division: division,
 			Leagues:  leagues,
 		}
-        _, err := db.InsertSchool(school)
-        if err != nil {
-            logger.Fatal("Error inserting school", err)
-        }
+		_, err := db.InsertSchool(school)
+		if err != nil {
+			logger.Fatal("Error inserting school", err)
+		}
 	})
 }
 
@@ -343,7 +344,7 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 		//	logger.Fatal("School not found, we should be able to find it:", schoolNameURL)
 		//}
 
-        athleteURL := e.Request.URL.String()
+		athleteURL := e.Request.URL.String()
 		findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
 		if len(findID) < 2 {
 			logger.Fatalf("athlete url could not be searched for an id: %s", athleteURL)
@@ -354,8 +355,8 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 		}
 
 		ath := internal.Athlete{
-			ID:      uint32(athleteID),
-			Name:    athName,
+			ID:   uint32(athleteID),
+			Name: athName,
 		}
 		db.InsertAthlete(ath)
 	})
@@ -397,7 +398,7 @@ func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 
 		athleteURLs := make(map[uint32]string)
 		schoolURLs := make([]string, 0, tableLength)
-        athleteIDs := make([]uint32, 0, tableLength)
+		athleteIDs := make([]uint32, 0, tableLength)
 		// Collect into table struct
 		resultsRows.Each(func(i int, s *goquery.Selection) {
 			table[i] = make([]string, rowLength)
@@ -415,11 +416,11 @@ func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 						logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
 					}
 					athleteURLs[uint32(athleteID)] = athleteURL
-                    athleteIDs = append(athleteIDs, uint32(athleteID))
+					athleteIDs = append(athleteIDs, uint32(athleteID))
 					table[i][j] = fmt.Sprint(athleteID)
 				} else if j == 3 {
 					url, _ := r.Children().Attr("href")
-                    schoolURLs = append(schoolURLs, url)
+					schoolURLs = append(schoolURLs, url)
 					table[i][j] = strings.TrimSpace(r.Children().Text())
 				} else {
 					table[i][j] = strings.TrimSpace(whitespaceReplace.ReplaceAllString(r.Text(), " "))
@@ -441,17 +442,17 @@ func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 			athleteCollector.Visit(athleteURLs[athleteID])
 		}
 
-        // TODO: populate the athlete-school relations
-        for i, url := range schoolURLs {
-            school, found := db.GetSchoolURL(url)
-            if !found {
-                logger.Fatal("We must be able to find the school", url)
-            }
-            db.AddAthleteToSchool(athleteIDs[i], school.ID)
-        }
+		// TODO: populate the athlete-school relations
+		for i, url := range schoolURLs {
+			school, found := db.GetSchoolURL(url)
+			if !found {
+				logger.Fatal("We must be able to find the school", url)
+			}
+			db.AddAthleteToSchool(athleteIDs[i], school.ID)
+		}
 
 		// once this is done, we can insert the heat
-		db.InsertHeat(eventType, meetID, resultTable)
+		_, err = db.InsertHeat(eventType, meetID, resultTable)
 	})
 	return meetCollector
 }
