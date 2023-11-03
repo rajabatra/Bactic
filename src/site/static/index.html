@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        /* Define styles for the container */
+        .page-container {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .page-title {
+            text-align:center;
+        }
+
+        .page-subtitle {
+            text-align:center;
+            font-style: italic;
+        }
+
+        /* Define styles for the navigation bar */
+        .sidenav {
+            height: 100%;
+            width: 160px;
+            position: fixed;
+            z-index: 1;
+            top: 0;
+            left: 0;
+            background-color: #111;
+            overflow-x: hidden;
+            padding-top: 20px;
+        }
+
+        .sidenav a {
+            padding: 6px 8px 6px 16px;
+            text-decoration: none;
+            font-size: 25px;
+            color: #818181;
+            display: block;
+        }
+
+        .sidenav a:hover {
+            color: #f1f1f1;
+        }
+
+        .main {
+            margin-left: 160px;
+            padding: 0px 10px;
+        }
+
+        /* Define styles for the search bar */
+        #search-bar {
+            width: 80%;
+            padding: 10px;
+        }
+
+        /* Define styles for the footer */
+        #footer {
+            background-color: #3498db;
+            /* Blue background color */
+            color: #fff;
+            /* White text color */
+            padding: 10px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .hidden {
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Container with vertical navbar -->
+    <div class="page-container">
+        <!-- Navigation Bar (Vertical) -->
+        <div class="sidenav">
+            <a href="#" onclick="setPage('about')">About</a>
+            <a href="#" onclick="setPage('stats')">Global Stats</a>
+            <a href="#" onclick="setPage('athlete-search')">Athlete Search</a>
+            <a href="#" onclick="setPage('database')">Database</a>
+        </div>
+        <!-- Content Area -->
+        <div class="main">
+            <h2 class="page-title">Bactic stats</h2>
+            <p class="page-subtitle">The all-in-one running statistics site for letsrun enjoyers and collegiate running enthusiasts</p>
+
+            <!-- Search Bar -->
+            <input type="text" id="search-bar" placeholder="Search...">
+
+            <!-- Stats Page -->
+            <section id="page-stats" class="hidden">
+                <div class="page-container">
+                    <div class="stats-header">
+                        A collection of global statistical analyses for the entire Bactic database
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Athlete -->
+            <section id="page-athlete" class="hidden">
+                <div class="page-container">
+
+                </div>
+            </section>
+
+
+            <!-- Add JavaScript for search functionality -->
+            <script>
+                const searchInput = document.getElementById('search-bar');
+
+                searchInput.addEventListener('input', function () {
+                    const searchTerm = searchInput.value;
+                    console.log('Search term: ' + searchTerm);
+                    // You can add your search functionality here
+                });
+            </script>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div id="footer">
+        <p>&copy; 2023 My Website. All rights reserved.</p>
+    </div>
+</body>
+
+</html>
