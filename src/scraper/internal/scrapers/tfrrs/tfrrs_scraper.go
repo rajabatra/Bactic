@@ -120,7 +120,7 @@ var titleToEventEnum = map[string]uint8{
 	"triple jump":       internal.TRIPLE_JUMP,
 	"shot put":          internal.SHOT,
 	"discus":            internal.DISCUS,
-	"hammer throw":      internal.HAMMER,
+	"hammer":            internal.HAMMER,
 	"javelin":           internal.JAV,
 	"decathlon":         internal.DEC,
 	"heptathlon":        internal.HEPT,
@@ -129,16 +129,16 @@ var titleToEventEnum = map[string]uint8{
 
 // Given an event title, return the enumerated event
 func parseEvent(event_title string) (uint8, error) {
-	sex_re := regexp.MustCompile(`Men's|Women's`)
-	trailing_re := regexp.MustCompile(`(Preliminaries|Finals)?(Heat {\d+})?`)
-	event_parsed := sex_re.ReplaceAllString(event_title, "")
-	event_parsed = trailing_re.ReplaceAllString(event_parsed, "")
-	event_parsed = strings.TrimSpace(event_parsed)
-	event_parsed = strings.ToLower(event_parsed)
+	sexRe := regexp.MustCompile(`Men's|Women's`)
+	trailingRe := regexp.MustCompile(`(Preliminaries|Finals)?(Heat {\d+})?`)
+	eventParsed := sexRe.ReplaceAllString(event_title, "")
+	eventParsed = trailingRe.ReplaceAllString(eventParsed, "")
+	eventParsed = strings.TrimSpace(eventParsed)
+	eventParsed = strings.ToLower(eventParsed)
 
-	event_type, err := titleToEventEnum[event_parsed]
-	if err != true {
-		return 0, fmt.Errorf("The event title %s, which converts to key %s could not be mapped to an event", event_title, event_parsed)
+	event_type, exists := titleToEventEnum[eventParsed]
+	if exists != true {
+		return 0, fmt.Errorf("The event title %s, which converts to key %s could not be mapped to an event", event_title, eventParsed)
 	}
 
 	return event_type, nil
@@ -149,56 +149,126 @@ type ParseResult struct {
 	err    error
 }
 
-func parseResultTable(resultTable [][]string, logger *log.Logger, eventType uint8) ([]internal.Result, uint8) {
+func parseResultTable(resultTable [][][]string, logger *log.Logger, eventType uint8) ([]internal.Result, uint8) {
 	ret := make([]internal.Result, 0, len(resultTable))
 
 	for _, row := range resultTable {
-		result, err := parseResultRow(row, eventType)
+		result, err := parseResultClass[eventType](row)
 		if err != nil {
-			logger.Printf("Unable to parse event row: %s. Ignoring", row)
+			logger.Printf("Unable to parse event row due to error: %v. Ignoring", err)
 		} else {
 			ret = append(ret, result)
 		}
 	}
-
 	return ret, eventType
 }
 
-func parseDistanceResult(row []string) (internal.Result, error) {
+func parseDistanceResult(row [][]string) (internal.Result, error) {
 	if len(row) < 5 {
 		return internal.Result{}, fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
 	}
+	var (
+		err   error
+		place int
+	)
 
-	time, err := parseTime(row[4])
+	if len(row[0][0]) > 0 {
+		place, err = strconv.Atoi(row[0][0])
+		if err != nil {
+			return internal.Result{}, err
+		}
+	}
+
+	time, err := parseTime(row[4][0])
+	if err != nil {
+		return internal.Result{}, err
+	}
+
+	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
 		return internal.Result{}, err
 	}
 
 	return internal.Result{
-		Quantity: time,
+		Quantity:  time,
+		Place:     uint8(place),
+		AthleteID: athleteID,
 	}, nil
 }
 
-func parseSprintsResult(row []string) (internal.Result, error) {
+func parseSprintsResult(row [][]string) (internal.Result, error) {
 	if len(row) < 5 {
 		return internal.Result{}, fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
 	}
 
-	time, err := parseTime(row[4])
+	var (
+		place int
+		err   error
+	)
+	if len(row[0][0]) > 0 {
+		place, err = strconv.Atoi(row[0][0])
+		if err != nil {
+			return internal.Result{}, err
+		}
+	}
+
+	time, err := parseTime(row[4][0])
+	if err != nil {
+		return internal.Result{}, err
+	}
+
+	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
 		return internal.Result{}, err
 	}
 
 	return internal.Result{
-		Quantity: time,
+		Quantity:  time,
+		Place:     uint8(place),
+		AthleteID: athleteID,
 	}, nil
 }
 
-func notImplementedResult(row []string) (internal.Result, error) {
+func parseAthleteIDFromURL(athleteURL string) (uint32, error) {
+	findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
+	if len(findID) < 2 {
+		return 0, fmt.Errorf("athlete url could not be searched for an id: %s", athleteURL)
+	}
+	athleteID, err := strconv.Atoi(findID[1])
+	if err != nil {
+		return 0, fmt.Errorf("Unable to convert athlete url into valid ID: %s", athleteURL)
+	}
+	return uint32(athleteID), nil
+}
+
+func parseRelayResult(row []string) (internal.Result, error) {
+	if len(row) < 5 {
+		return internal.Result{}, fmt.Errorf("Relay result row %v is less than the correct length of 5", row)
+	}
+
+	time, err := parseTime(row[3])
+	if err != nil {
+		return internal.Result{}, err
+	}
+
+	err = nil
+	members := make([]uint32, 4)
+	for i, m := range strings.Split(row[2], ", ") {
+		members[i], err = parseAthleteIDFromURL(m)
+	}
+
+	return internal.Result{
+		Quantity: time,
+		Team:     row[0],
+		Members:  members,
+	}, nil
+}
+
+func notImplementedResult(row [][]string) (internal.Result, error) {
 	return internal.Result{}, errors.New("This result parser not yet implemented")
 }
 
-var parseResultClass = map[uint8](func([]string) (internal.Result, error)){
+var parseResultClass = map[uint8](func([][]string) (internal.Result, error)){
 	internal.T5000M:      parseDistanceResult,
 	internal.T100M:       parseSprintsResult,
 	internal.T200M:       parseSprintsResult,
@@ -223,29 +293,6 @@ var parseResultClass = map[uint8](func([]string) (internal.Result, error)){
 	internal.DEC:         notImplementedResult,
 	internal.HEPT:        notImplementedResult,
 	internal.T100H:       notImplementedResult,
-}
-
-func parseResultRow(resultRow []string, resultType uint8) (internal.Result, error) {
-	place, err := strconv.Atoi(resultRow[0])
-	if err != nil {
-		return internal.Result{},
-			fmt.Errorf("Unable to parse place string %s", resultRow[0])
-	}
-
-	athleteID, err := strconv.Atoi(resultRow[1])
-	if err != nil {
-		return internal.Result{},
-			fmt.Errorf("Unable to parse parse athlete id string %v", err)
-	}
-
-	row, err := parseResultClass[resultType](resultRow)
-	if err != nil {
-		return internal.Result{}, err
-	}
-
-	row.AthleteID = uint32(athleteID)
-	row.Place = uint8(place)
-	return row, nil
 }
 
 type TFRRSParser *colly.Collector
@@ -345,17 +392,14 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 		//}
 
 		athleteURL := e.Request.URL.String()
-		findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
-		if len(findID) < 2 {
-			logger.Fatalf("athlete url could not be searched for an id: %s", athleteURL)
-		}
-		athleteID, err := strconv.Atoi(findID[1])
+		athleteID, err := parseAthleteIDFromURL(athleteURL)
 		if err != nil {
-			logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
+			logger.Println(err)
+			return
 		}
 
 		ath := internal.Athlete{
-			ID:   uint32(athleteID),
+			ID:   athleteID,
 			Name: athName,
 		}
 		db.InsertAthlete(ath)
@@ -392,38 +436,21 @@ func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 		}
 
 		rowLength := resultsRows.First().Children().Length()
-		table := make([][]string, tableLength)
-
-		whitespaceReplace := regexp.MustCompile(`\s\s+`)
+		table := make([][][]string, tableLength)
 
 		athleteURLs := make(map[uint32]string)
 		schoolURLs := make([]string, 0, tableLength)
 		athleteIDs := make([]uint32, 0, tableLength)
 		// Collect into table struct
 		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i] = make([]string, rowLength)
+			table[i] = make([][]string, rowLength)
 			s.Children().Each(func(j int, r *goquery.Selection) {
-
-				// strip the athlete id, which we use to identify athletes
-				if j == 1 {
-					athleteURL, _ := r.Children().Attr("href")
-					findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
-					if len(findID) < 2 {
-						logger.Fatalf("athlete url could not be searched for an id: %s", athleteURL)
-					}
-					athleteID, err := strconv.Atoi(findID[1])
-					if err != nil {
-						logger.Print("Unable to convert athlete url into valid ID:", athleteURL)
-					}
-					athleteURLs[uint32(athleteID)] = athleteURL
-					athleteIDs = append(athleteIDs, uint32(athleteID))
-					table[i][j] = fmt.Sprint(athleteID)
-				} else if j == 3 {
-					url, _ := r.Children().Attr("href")
-					schoolURLs = append(schoolURLs, url)
-					table[i][j] = strings.TrimSpace(r.Children().Text())
-				} else {
-					table[i][j] = strings.TrimSpace(whitespaceReplace.ReplaceAllString(r.Text(), " "))
+				// strip text and link if it exists
+				table[i][j] = make([]string, 0, 2)
+				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
+				href, found := r.Children().Attr("href")
+				if found {
+					table[i][j] = append(table[i][j], href)
 				}
 			})
 		})

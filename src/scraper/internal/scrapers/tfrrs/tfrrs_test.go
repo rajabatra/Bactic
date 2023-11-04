@@ -11,13 +11,14 @@ import (
 
 func TestScraperPage(t *testing.T) {
 	db := database.NewBacticDB("sqlite3", "sciac.db")
-    db.SetupSchema()
+	_, err := db.DBConn.Exec("PRAGMA foreign_keys=true")
+	if err != nil {
+		t.Fatalf("Failed to set foreign keys pragma in test database: %v", err)
+	}
+	db.SetupSchema()
 
-    collector := tfrrs.NewMeetCollector(db, uuid.New().ID())
-    collector.Visit("https://tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships")
+	collector := tfrrs.NewMeetCollector(db, uuid.New().ID())
+	collector.Visit("https://tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships")
 
-    // assert that we have inserted some values
+	// assert that we have inserted some values
 }
-
-
-

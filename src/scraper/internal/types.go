@@ -106,6 +106,8 @@ type Result struct {
 	Quantity float32
 	WindMS   float32
 	Stage    uint8
+	Team     string
+	Members  []uint32
 }
 
 // TODO: implement
