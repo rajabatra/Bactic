@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"scraper/internal"
@@ -295,9 +297,14 @@ var parseResultClass = map[uint8](func([][]string) (internal.Result, error)){
 	internal.T100H:       notImplementedResult,
 }
 
-type TFRRSParser *colly.Collector
+func NewTFRRSCollector(db *database.BacticDB, sig chan os.Signal, wg *sync.WaitGroup) {
 
-func NewTFRRSCollector(db *database.BacticDB) TFRRSParser {
+	// every day, we check the root page if we have finished scraping for the previous day (hopefully)
+
+	// if channel is signalled, wait for the current scraping meet to finish
+
+	// decrement wg when we are done
+	defer wg.Done()
 	rootCollector := colly.NewCollector()
 
 	// setup single-page scraper
@@ -306,7 +313,6 @@ func NewTFRRSCollector(db *database.BacticDB) TFRRSParser {
 
 	// Setup the rss feed scraper
 	setupRootCollector(rootCollector, meetCollector, db)
-	return rootCollector
 }
 
 func setupRootCollector(rootCollector *colly.Collector, meetCollector *colly.Collector, db *database.BacticDB) {
@@ -457,6 +463,7 @@ func NewMeetCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 
 		// parse all information from table
 		resultTable, eventType := parseResultTable(table, logger, eventType)
+		logger.Printf("%v, %v", resultTable, eventType)
 		athletesToScrape := db.GetMissingAthletes(resultTable)
 		schoolsToScrape := db.GetMissingSchools(schoolURLs)
 

@@ -10,7 +10,7 @@ import (
 )
 
 func setupDummyDB() *database.BacticDB {
-    db := database.NewBacticDB("sqlite3", ":memory:")
+	db := database.NewBacticDB("sqlite3", ":memory:")
 	_, err := db.DBConn.Exec("PRAGMA foreign_keys = ON")
 	if err != nil {
 		panic(err)

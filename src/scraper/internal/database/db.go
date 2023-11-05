@@ -11,7 +11,6 @@ import (
 	_ "embed"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
 
 type BacticDB struct {
@@ -29,7 +28,7 @@ var teardownSQL string
 func NewBacticDB(driverName string, connStr string) *BacticDB {
 	conn, err := sql.Open(driverName, connStr)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Could not connect to database with url %s due to error: %v", connStr, err)
 	}
 	logger := log.Default()
 	logger.SetPrefix("Database")
@@ -319,4 +318,8 @@ func (db *BacticDB) GetMissingSchools(schoolURLs []string) []string {
 		}
 	}
 	return missingSchools
+}
+
+func (db *BacticDB) Close() {
+	db.DBConn.Close()
 }
