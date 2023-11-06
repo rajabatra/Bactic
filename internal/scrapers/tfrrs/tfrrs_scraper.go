@@ -1,6 +1,8 @@
 package tfrrs
 
 import (
+	"bactic/internal"
+	"bactic/internal/database"
 	"errors"
 	"fmt"
 	"log"
@@ -11,11 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"scraper/internal"
-	"scraper/internal/database"
-
 	"github.com/PuerkitoBio/goquery"
-	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly"
 	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 	"golang.org/x/text/cases"

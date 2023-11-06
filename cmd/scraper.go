@@ -1,19 +1,16 @@
 package main
 
 import (
+	"bactic/internal/database"
+	"bactic/internal/scrapers/athnet"
+	"bactic/internal/scrapers/tfrrs"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"scraper/internal/database"
-	"scraper/internal/scrapers/athnet"
-	"scraper/internal/scrapers/tfrrs"
 	"strings"
 	"sync"
 	"syscall"
-
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -33,7 +30,7 @@ func main() {
 	if len(dbURL) == 0 {
 		dbURL, found = os.LookupEnv("DB_URL")
 		if !found {
-			log.Fatal("Database url not found in environment variable DB_URL or in cli arg \"db\"")
+			log.Fatal("Database url not found in environment variable DB_URL. It must be specified in the arg \"db\"")
 		}
 	}
 

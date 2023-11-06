@@ -1,8 +1,8 @@
 package database_test
 
 import (
-	"scraper/internal"
-	"scraper/internal/database"
+	"bactic/internal"
+	"bactic/internal/database"
 	"testing"
 	"time"
 
@@ -242,6 +242,9 @@ func TestAthleteSchoolRelation(t *testing.T) {
 	}
 
 	err = db.AddAthleteToSchool(ath1.ID, school.ID)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func TestInsertMeet(t *testing.T) {

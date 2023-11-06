@@ -1,9 +1,9 @@
 package athnet
 
 import (
+	"bactic/internal/database"
 	"log"
 	"os"
-	"scraper/internal/database"
 	"sync"
 )
 

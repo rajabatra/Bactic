@@ -1,12 +1,10 @@
 package database
 
 import (
+	"bactic/internal"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
-	"os"
-	"scraper/internal"
 
 	_ "embed"
 
@@ -53,17 +51,6 @@ func (b *BacticDB) TeardownSchema() {
 	}
 }
 
-func defaultDBConnect() (*BacticDB, error) {
-
-	dbConnURL, found := os.LookupEnv("BACTIC_DB_URL")
-	if found == false {
-		return &BacticDB{}, errors.New("Unable to find bactic database connection string BACTIC_DB_URL")
-	}
-	db := NewBacticDB("postgres", dbConnURL)
-
-	return db, nil
-}
-
 // Search the struct for additional data that needs to be crawled before inserting some results
 func (db *BacticDB) GetCrawls(results []internal.Result) []uint32 {
 	// we are given an athlete id and wish to know if that athlete exists
@@ -88,7 +75,6 @@ func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
 	}
 
 	rows, err := db.DBConn.Query("SELECT school_id FROM athlete_in_school WHERE athlete_id = ?", athID)
-	defer rows.Close()
 	if err != nil && err != sql.ErrNoRows {
 		log.Fatal("Query to athlete-school-relation table failed", err)
 	}
@@ -102,6 +88,9 @@ func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
 			log.Fatal("Unable to unmarshal school id", err)
 		}
 		schools = append(schools, school)
+	}
+	if err = rows.Close(); err != nil {
+		panic(err)
 	}
 	athlete.Schools = schools
 
@@ -119,7 +108,6 @@ func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
 
 	row.Scan(&school.ID, &school.Name, &school.Division)
 	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
-	defer leagues.Close()
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
@@ -132,6 +120,11 @@ func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
 		leagues.Scan(&league)
 		l = append(l, league)
 	}
+
+	if err = leagues.Close(); err != nil {
+		panic(err)
+	}
+
 	school.Leagues = l
 	return school, true
 }
@@ -148,7 +141,6 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 	}
 
 	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
-	defer leagues.Close()
 	if err == sql.ErrNoRows {
 		return school, true
 	} else if err != nil {
@@ -160,6 +152,10 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 	for leagues.Next() {
 		leagues.Scan(&league)
 		l = append(l, league)
+	}
+
+	if err = leagues.Close(); err != nil {
+		panic(err)
 	}
 	school.Leagues = l
 	return school, true
@@ -174,7 +170,7 @@ func (db *BacticDB) InsertAthlete(ath internal.Athlete) error {
 	for _, schoolID := range ath.Schools {
 		err = db.AddAthleteToSchool(ath.ID, schoolID)
 		if err != nil {
-			return fmt.Errorf("Error creating athlete school relation: %s", err)
+			return fmt.Errorf("could not create athlete school relation: %s", err)
 		}
 	}
 
@@ -270,7 +266,7 @@ func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []interna
 	_, err = cur.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES(?, ?, ?)", heatID, meetID, eventType)
 	if err != nil {
 		cur.Rollback()
-		return 0, fmt.Errorf("Could not create heat table: %s", err)
+		return 0, fmt.Errorf("could not create heat table: %s", err)
 	}
 
 	// check to see that all schools are in the database
@@ -279,13 +275,13 @@ func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []interna
 		result.HeatID = heatID
 		if err = insertResult(cur, result); err != nil {
 			cur.Rollback()
-			return 0, fmt.Errorf("Could not insert result: %s", err)
+			return 0, fmt.Errorf("could not insert result: %s", err)
 		}
 	}
 
 	if err = cur.Commit(); err != nil {
 		cur.Rollback()
-		return 0, fmt.Errorf("Could not commit table insert: %s", err)
+		return 0, fmt.Errorf("could not commit table insert: %s", err)
 	} else {
 		return heatID, nil
 	}
@@ -296,7 +292,7 @@ func (db *BacticDB) GetMissingAthletes(results []internal.Result) []uint32 {
 	missingID := make([]uint32, 0, len(results))
 	for _, result := range results {
 		_, found := db.getAthlete(result.AthleteID)
-		if found == false {
+		if !found {
 			missingID = append(missingID, result.AthleteID)
 		}
 	}

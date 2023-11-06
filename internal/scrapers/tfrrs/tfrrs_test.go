@@ -1,8 +1,8 @@
 package tfrrs_test
 
 import (
-	"scraper/internal/database"
-	"scraper/internal/scrapers/tfrrs"
+	"bactic/internal/database"
+	"bactic/internal/scrapers/tfrrs"
 	"testing"
 
 	"github.com/google/uuid"
@@ -24,5 +24,5 @@ func TestScraperMeet(t *testing.T) {
 }
 
 func TestScraperRoot(t *testing.T) {
-	db := database.NewBacticDB("sqlite3", ":memory:")
+	// db := database.NewBacticDB("sqlite3", ":memory:")
 }
