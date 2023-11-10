@@ -4,26 +4,35 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 var (
 	logger *log.Logger
-	srv    http.Server
 )
 
+// Root api handler function. All api requests are routed in here
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Println("Got one API request")
+}
+
+// Sets up a file server that serves ./web/index.html to the root page and then static assets to all other paths
+func setupFileServer(mux *http.ServeMux) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI == "/" {
+			http.ServeFile(w, r, "./web/index.html")
+		} else {
+			http.ServeFile(w, r, filepath.Join("./web", r.RequestURI))
+		}
+	})
 }
 
 func main() {
 	logger = log.Default()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/", apiHandler)
-	fs := http.FileServer(http.Dir("./static"))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/index.html")
-	})
-	mux.Handle("/static/", http.StripPrefix("/static/", fs))
+	setupFileServer(mux)
+
 	port, found := os.LookupEnv("PORT")
 	if !found {
 		port = "8080"
