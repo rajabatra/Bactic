@@ -15,7 +15,7 @@ func TestCdkDemoStack(t *testing.T) {
 	app := awscdk.NewApp(nil)
 
 	// 	// WHEN
-	stack := NewCdkDemoStack(app, "MyStack", nil)
+	stack := NewBacticStack(app, "MyStack", nil)
 
 	// 	// THEN
 	template := assertions.Template_FromStack(stack, &assertions.TemplateParsingOptions{
