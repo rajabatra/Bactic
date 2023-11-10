@@ -4,8 +4,9 @@ import (
 	"os"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsecrassets"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
+	"github.com/sethvargo/go-password/password"
 
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -15,7 +16,7 @@ type CdkDemoStackProps struct {
 	awscdk.StackProps
 }
 
-func NewCdkDemoStack(scope constructs.Construct, id string, props *CdkDemoStackProps) awscdk.Stack {
+func NewBacticStack(scope constructs.Construct, id string, props *CdkDemoStackProps) awscdk.Stack {
 	var sprops awscdk.StackProps
 	if props != nil {
 		sprops = props.StackProps
@@ -24,23 +25,88 @@ func NewCdkDemoStack(scope constructs.Construct, id string, props *CdkDemoStackP
 
 	// The code that defines your stack goes here
 
-	vpc := awsec2.NewVpc(stack, jsii.String("BacticVpc"), &awsec2.VpcProps{})
-	awsrds.NewDatabaseInstance(stack, jsii.String("BacticRelationalDatabase"), &awsrds.DatabaseInstanceProps{
-		Engine: awsrds.DatabaseInstanceEngine_Postgres(&awsrds.PostgresInstanceEngineProps{
-			Version: awsrds.PostgresEngineVersion_VER_15(),
-		}),
-		InstanceType: awsec2.InstanceType_Of(awsec2.InstanceClass_BURSTABLE3, awsec2.InstanceSize_MICRO),
-		Credentials:  awsrds.Credentials_FromGeneratedSecret(jsii.String("syscdk"), &awsrds.CredentialsBaseOptions{}),
-		Vpc:          vpc,
-		VpcSubnets: &awsec2.SubnetSelection{
-			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
-		},
+	// For now, just get the default VPC in our region
+	// vpc := awsec2.Vpc_FromLookup(stack, jsii.String("VPC"), &awsec2.VpcLookupOptions{
+	// 	IsDefault: jsii.Bool(true),
+	// })
+
+	// awsec2.NewPublicSubnet(
+	// 	stack, jsii.String("bactic-public-subnet"), &awsec2.PublicSubnetProps{
+	// 		AvailabilityZone:    jsii.String("us-west-1a"),
+	// 		CidrBlock:           jsii.String("10.0.1.0/24"),
+	// 		VpcId:               vpc.VpcId(),
+	// 		MapPublicIpOnLaunch: jsii.Bool(true),
+	// 	})
+
+	// awsec2.NewPrivateSubnet(stack, jsii.String("bactic-private-subnet"), &awsec2.PrivateSubnetProps{
+	// 	AvailabilityZone:    jsii.String("us-west-1a"),
+	// 	CidrBlock:           jsii.String("10.0.2.0/24"),
+	// 	VpcId:               vpc.VpcId(),
+	// 	MapPublicIpOnLaunch: jsii.Bool(false),
+	// })
+
+	cluster := awsecs.NewCluster(stack, jsii.String("bactic-cluster"), &awsecs.ClusterProps{})
+
+	// Database setup
+	dbTask := awsecs.NewTaskDefinition(stack, jsii.String("DatabaseTask"), &awsecs.TaskDefinitionProps{
+		Compatibility: awsecs.Compatibility_FARGATE,
+		Cpu:           jsii.String("256"),
+		MemoryMiB:     jsii.String("512"),
 	})
 
-	// awsec2.NewInstance(stack, jsii.String("BacticServer"), &awsec2.InstanceProps{
-	// 	InstanceType: awsec2.InstanceType_Of(awsec2.InstanceClass_BURSTABLE3, awsec2.InstanceSize_SMALL),
-	// 	MachineImage: awsec2.MachineImage_GenericLinux()
-	// })
+	postgres_pass, err := password.Generate(32, 10, 10, false, true)
+	if err != nil {
+		panic(err)
+	}
+
+	dbContainer := dbTask.AddContainer(jsii.String("postgres-bactic"), &awsecs.ContainerDefinitionOptions{
+		Image:          awsecs.AssetImage_FromRegistry(jsii.String("postgres:15.4"), nil),
+		MemoryLimitMiB: jsii.Number(512),
+	})
+	dbContainer.AddEnvironment(jsii.String("POSTGRES_PASSWORD"), jsii.String(postgres_pass))
+	dbContainer.AddEnvironment(jsii.String("POSTGRES_DB"), jsii.String("bactic"))
+	dbContainer.AddPortMappings(&awsecs.PortMapping{
+		ContainerPort: jsii.Number(5432),
+		HostPort:      jsii.Number(5432),
+	})
+
+	awsecs.NewFargateService(stack, jsii.String("bactic-database"), &awsecs.FargateServiceProps{
+		Cluster:        cluster,
+		TaskDefinition: dbTask,
+	})
+
+	// Define scraper task
+	scraperTask := awsecs.NewTaskDefinition(stack, jsii.String("bactic-scraper-task"), &awsecs.TaskDefinitionProps{
+		Compatibility: awsecs.Compatibility_FARGATE,
+		Cpu:           jsii.String("256"),
+		MemoryMiB:     jsii.String("512"),
+	})
+
+	scraperContainer := scraperTask.AddContainer(jsii.String("bactic-scraper-container"), &awsecs.ContainerDefinitionOptions{
+		Image: awsecs.ContainerImage_FromDockerImageAsset(awsecrassets.NewDockerImageAsset(stack, jsii.String("bactic-scraper-image"), &awsecrassets.DockerImageAssetProps{
+			File:      jsii.String("Dockerfile.scraper"),
+			AssetName: jsii.String("Scraper"),
+			Directory: jsii.String("."),
+		})),
+		MemoryLimitMiB: jsii.Number(512),
+	})
+	scraperContainer.AddEnvironment(jsii.String("DB_PASS"), jsii.String(postgres_pass))
+
+	// Define web task
+
+	webTask := awsecs.NewTaskDefinition(stack, jsii.String("bactic-web-task"), &awsecs.TaskDefinitionProps{
+		Compatibility: awsecs.Compatibility_FARGATE,
+		Cpu:           jsii.String("256"),
+		MemoryMiB:     jsii.String("512"),
+	})
+
+	webTask.AddContainer(jsii.String("bactic-web-container"), &awsecs.ContainerDefinitionOptions{
+		Image: awsecs.ContainerImage_FromDockerImageAsset(awsecrassets.NewDockerImageAsset(stack, jsii.String("WebServerImage"), &awsecrassets.DockerImageAssetProps{
+			File:      jsii.String("Dockerfile.web"),
+			AssetName: jsii.String("Web"),
+			Directory: jsii.String("."),
+		})),
+	})
 
 	return stack
 }
@@ -50,7 +116,7 @@ func main() {
 
 	app := awscdk.NewApp(nil)
 
-	NewCdkDemoStack(app, "CdkDemoStack", &CdkDemoStackProps{
+	NewBacticStack(app, "BacticStack", &CdkDemoStackProps{
 		awscdk.StackProps{
 			Env: env(),
 		},
@@ -64,6 +130,6 @@ func main() {
 func env() *awscdk.Environment {
 	return &awscdk.Environment{
 		Account: jsii.String(os.Getenv("CDK_DEFAULT_ACCOUNT")),
-		Region:  jsii.String(os.Getenv("CDK_DEFAULT_REGION")),
+		Region:  jsii.String("us-west-1"),
 	}
 }

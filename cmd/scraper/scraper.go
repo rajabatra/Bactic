@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -34,7 +36,7 @@ func main() {
 		}
 	}
 
-	db := database.NewBacticDB("sqlite3", dbURL)
+	db := database.NewBacticDB("postgres", dbURL)
 	db.SetupSchema()
 	defer db.Close()
 

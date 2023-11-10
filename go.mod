@@ -6,6 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/aws/constructs-go/constructs/v10 v10.2.70
 	github.com/aws/jsii-runtime-go v1.89.0
+	github.com/sethvargo/go-password v0.2.0
 	golang.org/x/text v0.13.0
 )
 
@@ -40,6 +41,7 @@ require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.105.0
 	github.com/gocolly/colly v1.2.0
 	github.com/google/uuid v1.4.0
+	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.18
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/net v0.16.0 // indirect
