@@ -1,0 +1,86 @@
+openapi: 3.1.0
+info:
+  title: Bactic
+  summary: Bactic site and database API.
+  version: 0.1.0
+paths:
+  /search/athlete:
+    parameters:
+      - name: name
+        in: query
+        description: the prefix of the search
+        required: true
+        schema:
+          type: string
+    get:
+      description: Search for athlete name
+      responses:
+        '200':
+          description: a list of the top 10 most similar name matches and their database ids
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/SearchItem'
+  # /stats/athlete:
+  # /stats/team:
+  /stats/hist:
+    parameters:
+      - name: events
+        in: query
+        description: List of events
+        required: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+      - name: buckets
+        in: query
+        description: number of histogram buckets
+        required: false
+        schema:
+          type: number
+          format: float
+          default: 10
+    get:
+      description: Get histogram
+      responses:
+        '200':
+          description: a histogram with buckets entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: number
+                  format: float
+components:
+  schemas:
+    SearchItem:
+      type: object
+      properties:
+        name:
+          type: string
+        id:
+          type: integer
+          format: int64
+      required:
+        - name
+        - id
+      example:
+        name: First Last
+        id: 1
+    Event:
+      type: string
+      enum:
+        - '100m'
+        - '200m'
+        - '1500m'
+        - '5000m'
+    # StatsSummary:
+    #   type: object
+    #   properties:
+    #   bests:
+    #     type: map
+      

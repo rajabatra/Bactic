@@ -17,3 +17,7 @@
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# openapi artifacts
+.openapi*
+openapi*

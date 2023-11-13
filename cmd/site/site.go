@@ -13,7 +13,7 @@ var (
 
 // Root api handler function. All api requests are routed in here
 func apiHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Println("Got one API request")
+	http.ServeFile(w, r, "./web/api.html")
 }
 
 // Sets up a file server that serves ./web/index.html to the root page and then static assets to all other paths
