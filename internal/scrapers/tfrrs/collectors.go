@@ -178,7 +178,37 @@ func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector 
 				}
 			})
 		})
+		// parse all information from table
+		resultTable, athleteURLs, schoolURLs := parseResultTable(table, logger, eventType)
+		logger.Printf("%v, %v", resultTable, eventType)
+		athletesToScrape := db.GetMissingAthletes(resultTable)
+		schoolsToScrape := db.GetMissingSchools(schoolURLs)
+
+		// visit schools before athletes due to the database relation dependencies
+		for _, url := range schoolsToScrape {
+			schoolCollector.Visit(url)
+		}
+
+		for _, athleteID := range athletesToScrape {
+			athleteCollector.Visit(athleteURLs[athleteID])
+		}
+
+		// populate the athlete-school relations
+		for i, url := range schoolURLs {
+			school, found := db.GetSchoolURL(url)
+			if !found {
+				logger.Fatal("We must be able to find the school", url)
+			}
+			db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID)
+		}
+
+		// once this is done, we can insert the heat
+		_, err = db.InsertHeat(eventType, meetID, resultTable)
+		if err != nil {
+			panic(err)
+		}
 	})
+	return meetCollector
 }
 
 func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
@@ -213,9 +243,6 @@ func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collect
 		rowLength := resultsRows.First().Children().Length()
 		table := make([][][]string, tableLength)
 
-		athleteURLs := make(map[uint32]string)
-		schoolURLs := make([]string, 0, tableLength)
-		athleteIDs := make([]uint32, 0, tableLength)
 		// Collect into table struct
 		resultsRows.Each(func(i int, s *goquery.Selection) {
 			table[i] = make([][]string, rowLength)
@@ -231,7 +258,7 @@ func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collect
 		})
 
 		// parse all information from table
-		resultTable, eventType := parseResultTable(table, logger, eventType)
+		resultTable, athleteURLs, schoolURLs := parseResultTable(table, logger, eventType)
 		logger.Printf("%v, %v", resultTable, eventType)
 		athletesToScrape := db.GetMissingAthletes(resultTable)
 		schoolsToScrape := db.GetMissingSchools(schoolURLs)
@@ -245,17 +272,20 @@ func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collect
 			athleteCollector.Visit(athleteURLs[athleteID])
 		}
 
-		// TODO: populate the athlete-school relations
+		// populate the athlete-school relations
 		for i, url := range schoolURLs {
 			school, found := db.GetSchoolURL(url)
 			if !found {
 				logger.Fatal("We must be able to find the school", url)
 			}
-			db.AddAthleteToSchool(athleteIDs[i], school.ID)
+			db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID)
 		}
 
 		// once this is done, we can insert the heat
 		_, err = db.InsertHeat(eventType, meetID, resultTable)
+		if err != nil {
+			panic(err)
+		}
 	})
 	return meetCollector
 }

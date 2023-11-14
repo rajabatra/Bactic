@@ -256,7 +256,7 @@ func insertResult(cur *sql.Tx, result internal.Result) error {
 }
 
 // We should process inserts heat-by-heat, since that is how the data is scraped
-func (db *BacticDB) InsertHeat(eventType uint8, meetID uint32, results []internal.Result) (uint32, error) {
+func (db *BacticDB) InsertHeat(eventType int, meetID uint32, results []internal.Result) (uint32, error) {
 	// check to see if athlete exists
 	heatID := uuid.New().ID()
 	cur, err := db.DBConn.Begin()
