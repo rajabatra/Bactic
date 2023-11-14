@@ -17,7 +17,7 @@ func TestScraperMeet(t *testing.T) {
 	}
 	db.SetupSchema()
 
-	collector := tfrrs.NewMeetCollector(db, uuid.New().ID())
+	collector := tfrrs.NewTFRRSTrackCollector(db, uuid.New().ID())
 	collector.Visit("https://tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships")
 
 	// assert that we have inserted some values

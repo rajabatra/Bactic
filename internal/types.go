@@ -13,6 +13,13 @@ const (
 	NAIA = 0
 )
 
+// Seasons
+const (
+	XC      = 0
+	INDOOR  = 1
+	OUTDOOR = 2
+)
+
 var divisionToStr = map[int]string{
 	DIII: "DIII",
 	DII:  "DII",
@@ -130,9 +137,10 @@ type School struct {
 }
 
 type Meet struct {
-	ID   uint32
-	Name string
-	Date time.Time
+	ID     uint32
+	Name   string
+	Season int
+	Date   time.Time
 }
 
 type Athlete struct {

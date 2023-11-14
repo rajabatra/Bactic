@@ -300,7 +300,7 @@ func (db *BacticDB) GetMissingAthletes(results []internal.Result) []uint32 {
 }
 
 func (db *BacticDB) InsertMeet(meet internal.Meet) error {
-	_, err := db.DBConn.Exec("INSERT INTO meet(id, name, date) VALUES(?, ?, ?)", meet.ID, meet.Name, meet.Date)
+	_, err := db.DBConn.Exec("INSERT INTO meet(id, name, date, season) VALUES(?, ?, ?, ?)", meet.ID, meet.Name, meet.Date, meet.Season)
 	return err
 }
 

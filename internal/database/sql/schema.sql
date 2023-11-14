@@ -6,14 +6,15 @@ CREATE TABLE IF NOT EXISTS athlete(
 
 CREATE TABLE IF NOT EXISTS meet(
     id BIGINT PRIMARY KEY,
-    name VARCHAR,
-    date DATE
+    name VARCHAR NOT NULL,
+    season SMALLINT NOT NULL,
+    date DATE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS heat(
     id BIGINT PRIMARY KEY,
     meet_id BIGINT,
-    event_type SMALLINT,
+    event_type SMALLINT NOT NULL,
     FOREIGN KEY(meet_id) REFERENCES meet(id)
 );
 
@@ -31,8 +32,8 @@ CREATE TABLE IF NOT EXISTS result(
 
 CREATE TABLE IF NOT EXISTS school(
     id BIGINT PRIMARY KEY,
-    name VARCHAR,
-    division SMALLINT,
+    name VARCHAR NOT NULL,
+    division SMALLINT NOT NULL,
     url VARCHAR NOT NULL UNIQUE
 );
 
