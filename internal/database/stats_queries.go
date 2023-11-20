@@ -4,6 +4,9 @@ import "bactic/internal"
 
 // Return a bucketing of data from table into nBuckets
 func (db *BacticDB) Histogram(eventType internal.EventType, nBuckets int) []int {
+	if nBuckets <= 0 {
+		panic("nBuckets must be greater than zero")
+	}
 	hist := make([]int, nBuckets)
 	var (
 		low  float32
@@ -22,13 +25,17 @@ func (db *BacticDB) Histogram(eventType internal.EventType, nBuckets int) []int 
 	}
 
 	inc := (high - low) / float32(nBuckets)
-	for i := 0; i < nBuckets; i++ {
+	for i := 0; i < nBuckets-1; i++ {
 		row = db.DBConn.QueryRow("SELECT COUNT(r.id) FROM result r LEFT JOIN heat h ON r.heat_id = h.id WHERE h.EVENT_TYPE=? AND r.quant >= ? AND r.quant < ?", eventType, inc*float32(i), inc*float32(i+1))
-		err = row.Scan(&hist[i])
-		if err != nil {
+		if err = row.Scan(&hist[i]); err != nil {
 			panic(err)
 		}
 	}
+	row = db.DBConn.QueryRow("SELECT COUNT(r.id) FROM result r LEFT JOIN heat h ON r.heat_id = h.id WHERE h.EVENT_TYPE=? AND r.quant >= ? AND r.quant <= ?", eventType, inc*float32(nBuckets-1), inc*float32(nBuckets))
+	if err = row.Scan(&hist[nBuckets-1]); err != nil {
+		panic(err)
+	}
+
 	return hist
 }
 

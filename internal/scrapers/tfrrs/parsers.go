@@ -119,11 +119,11 @@ var titleToEventEnum = map[string]internal.EventType{
 // Given an xc table header, return whether or not it is a summary
 func parseXCEventType(eventTitle string) (internal.EventType, error) {
 	eventTitle = strings.ToLower(eventTitle)
-	if strings.Contains("8k", eventTitle) {
+	if strings.Contains(eventTitle, "8k") {
 		return internal.XC_8K, nil
-	} else if strings.Contains("10k", eventTitle) {
+	} else if strings.Contains(eventTitle, "10k") {
 		return internal.XC_10K, nil
-	} else if strings.Contains("6k", eventTitle) {
+	} else if strings.Contains(eventTitle, "6k") {
 		return internal.XC_6K, nil
 	} else {
 		return 0, errors.New("Event table could not be parsed for type")
@@ -178,12 +178,12 @@ func parseXCResult(row [][]string) (internal.Result, uint32, string, error) {
 
 	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
-		return internal.Result{}, 0, "", nil
+		return internal.Result{}, 0, "", err
 	}
 
 	time, err := parseTime(row[5][0])
 	if err != nil {
-		return internal.Result{}, 0, "", nil
+		return internal.Result{}, 0, "", err
 	}
 
 	return internal.Result{

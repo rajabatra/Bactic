@@ -3,9 +3,11 @@ package database_test
 import (
 	"bactic/internal"
 	"bactic/internal/database"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -33,36 +35,33 @@ func TestTables(t *testing.T) {
 	}
 }
 
-func TestGetMissingAthletes(t *testing.T) {
+func TestGetAthleteID(t *testing.T) {
 	db := setupDummyDB()
 	defer db.TeardownSchema()
-	heat := []internal.Result{
-		{
-			ID:        123,
-			AthleteID: 123,
-		},
-		{
-			AthleteID: 456,
-		},
-		{
-			AthleteID: 789,
-		},
+	link1 := uuid.New().ID()
+	link2 := uuid.New().ID()
+	tfrrs := uuid.New().ID()
+	bactic := uuid.New().ID()
+	fmt.Println(link1, link2, tfrrs, bactic)
+
+	if err := db.AddAthleteRelation(link1, tfrrs); err != nil {
+		t.Fatal(err)
 	}
-	ids := make([]uint32, 3)
-	for i := 0; i < 3; i++ {
-		ids[i] = heat[i].AthleteID
+	// db.AddAthleteRelation(link2, tfrrs)
+	if err := db.AddAthleteRelation(tfrrs, bactic); err != nil {
+		t.Fatal(err)
 	}
 
-	missing_ids := db.GetMissingAthletes(ids)
-
-	expected := []uint32{123, 456, 789}
-	if len(missing_ids) != len(expected) {
-		t.Fail()
+	id, found := db.GetTFRRSAthleteID(link1)
+	if !found {
+		t.Fatal("Could not find link when there should have been")
 	}
-	for i, exp := range expected {
-		if *missing_ids[i] != exp {
-			t.Fail()
-		}
+	if id != bactic {
+		t.Fatal("Found bactic id was not the expected value")
+	}
+	_, found = db.GetTFRRSAthleteID(link2)
+	if found {
+		t.Fatal("Link found but should not have been")
 	}
 }
 
@@ -164,7 +163,27 @@ func TestGetSchool(t *testing.T) {
 		t.Errorf("Returned school did not match fields with the inserted value")
 	}
 }
+func TestGetAthlete(t *testing.T) {
+	db := setupDummyDB()
+	defer db.TeardownSchema()
+	ath1 := internal.Athlete{
+		Name: "Ath1",
+		ID:   123,
+	}
 
+	if err := db.InsertAthlete(ath1); err != nil {
+		t.Fatal(err)
+	}
+
+	res, found := db.GetAthlete(ath1.ID)
+	if !found {
+		t.Fatal("Could not find athlete in database")
+	}
+
+	if res.ID != ath1.ID || res.Name != ath1.Name {
+		t.Fatal("Names or IDs did not match")
+	}
+}
 func TestInsertHeat(t *testing.T) {
 	db := setupDummyDB()
 	defer db.TeardownSchema()

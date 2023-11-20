@@ -20,13 +20,6 @@ const (
 	OUTDOOR = iota
 )
 
-// Seasons
-const (
-	XC      = 0
-	INDOOR  = 1
-	OUTDOOR = 2
-)
-
 var divisionToStr = map[int]string{
 	DIII: "DIII",
 	DII:  "DII",

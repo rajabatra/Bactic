@@ -198,18 +198,6 @@ func (db *BacticDB) AddAthleteToSchool(athID uint32, schoolID uint32) error {
 		return err
 	}
 	return nil
-	//row := db.DBConn.QueryRow("SELECT * FROM athlete_in_school WHERE athlete_id = ? AND school_id = ?", athID, schoolID)
-	//if row.Err() != nil && row.Err() != sql.ErrNoRows {
-	//	log.Fatal("Threw unexpected error ", row.Err())
-	//	return nil
-	//} else if row.Err() == sql.ErrNoRows {
-	//	log.Println("Could not find any rows, adding to table")
-	//	_, err := db.DBConn.Exec("INSERT INTO athlete_in_school(athlete_id, school_id) VALUES(?, ?)", athID, schoolID)
-	//	return err
-	//} else {
-	//	log.Println("Row already exists")
-	//	return nil
-	//}
 }
 
 func (db *BacticDB) InsertSchool(school internal.School) (uint32, error) {
@@ -295,34 +283,32 @@ Here's the plan:
 */
 
 func (db *BacticDB) GetAthleteRelation(id uint32) (uint32, bool) {
-	row := db.DBConn.QueryRow("SELECT global_id FROM athlete_map WHERE instance_id = ?", id)
-	var global uint32
+	row := db.DBConn.QueryRow("SELECT y FROM athlete_map WHERE x = ?", id)
 	err := row.Scan(&id)
 	if err == sql.ErrNoRows {
 		return 0, false
 	} else if err != nil {
 		panic(err)
 	} else {
-		return global, true
+		return id, true
 	}
 }
 
-// For a list of results, check which athletes are missing and return that list
-func (db *BacticDB) GetMissingAthletes(mappedIds []uint32) []*uint32 {
-	globalIDs := make([]*uint32, 0, len(mappedIds))
-	for _, id := range mappedIds {
-		global, found := db.GetAthleteRelation(id)
-		if !found {
-			globalIDs = append(globalIDs, nil)
-		} else {
-			globalIDs = append(globalIDs, &global)
-		}
+// For a link id, return the bactic athlete id if it can be found
+func (db *BacticDB) GetTFRRSAthleteID(linkID uint32) (bacticID uint32, found bool) {
+	tfrrs, found := db.GetAthleteRelation(linkID)
+	if !found {
+		return 0, false
 	}
-	return globalIDs
+	bactic, found := db.GetAthleteRelation(tfrrs)
+	if !found {
+		return tfrrs, true
+	}
+	return bactic, true
 }
 
-func (db *BacticDB) AddAthleteRelation(mapped uint32, global uint32) error {
-	_, err := db.DBConn.Exec("INSERT INTO athlete_map(global_id, instance_id) VALUES(?, ?)", global, mapped)
+func (db *BacticDB) AddAthleteRelation(x uint32, y uint32) error {
+	_, err := db.DBConn.Exec("INSERT INTO athlete_map(x, y) VALUES(?, ?)", x, y)
 	return err
 }
 
