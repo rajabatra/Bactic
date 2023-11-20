@@ -35,37 +35,39 @@ var divisionToStr = map[int]string{
 }
 
 // Event types (XC and TF)
+type EventType uint32
+
 const (
-	T5000M      = iota
-	T100M       = iota
-	T200M       = iota
-	T400M       = iota
-	T800M       = iota
-	T1500M      = iota
-	T10000M     = iota
-	T110H       = iota
-	T400H       = iota
-	T3000S      = iota
-	T3000M      = iota
-	T4X100      = iota
-	T4X400      = iota
-	HIGH_JUMP   = iota
-	VAULT       = iota
-	LONG_JUMP   = iota
-	TRIPLE_JUMP = iota
-	SHOT        = iota
-	DISCUS      = iota
-	HAMMER      = iota
-	JAV         = iota
-	DEC         = iota
-	HEPT        = iota
-	T100H       = iota
-	XC_6K       = iota
-	XC_8K       = iota
-	XC_10K      = iota
+	T5000M      = EventType(iota)
+	T100M       = EventType(iota)
+	T200M       = EventType(iota)
+	T400M       = EventType(iota)
+	T800M       = EventType(iota)
+	T1500M      = EventType(iota)
+	T10000M     = EventType(iota)
+	T110H       = EventType(iota)
+	T400H       = EventType(iota)
+	T3000S      = EventType(iota)
+	T3000M      = EventType(iota)
+	T4X100      = EventType(iota)
+	T4X400      = EventType(iota)
+	HIGH_JUMP   = EventType(iota)
+	VAULT       = EventType(iota)
+	LONG_JUMP   = EventType(iota)
+	TRIPLE_JUMP = EventType(iota)
+	SHOT        = EventType(iota)
+	DISCUS      = EventType(iota)
+	HAMMER      = EventType(iota)
+	JAV         = EventType(iota)
+	DEC         = EventType(iota)
+	HEPT        = EventType(iota)
+	T100H       = EventType(iota)
+	XC_6K       = EventType(iota)
+	XC_8K       = EventType(iota)
+	XC_10K      = EventType(iota)
 )
 
-var eventToStr = map[int]string{
+var eventToStr = map[EventType]string{
 	T5000M:      "5000m",
 	T100M:       "100m",
 	T200M:       "200m",
@@ -120,7 +122,6 @@ type Result struct {
 	ID        uint32
 	HeatID    uint32
 	AthleteID uint32
-	Type      int
 	Place     int
 	// Either time in seconds or meters for distance respective of the event type
 	Quantity float32
@@ -137,7 +138,7 @@ func (m *Result) String() string {
 
 type Heat struct {
 	ID     uint32
-	Type   int
+	Type   EventType
 	MeetID uint32
 }
 

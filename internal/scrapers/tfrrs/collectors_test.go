@@ -23,8 +23,12 @@ func TestScraperMeet(t *testing.T) {
 )
 
 func TestScraperTFMeet(t *testing.T) {
+<<<<<<< HEAD
 	db := database.NewBacticDB("sqlite3", ":memory:")
 >>>>>>> 115597e (file splitting and stats files)
+=======
+	db := database.NewBacticDB("sqlite3", "sciac.db")
+>>>>>>> 0c33fca (added internal event type)
 	_, err := db.DBConn.Exec("PRAGMA foreign_keys=true")
 	if err != nil {
 		t.Fatalf("Failed to set foreign keys pragma in test database: %v", err)

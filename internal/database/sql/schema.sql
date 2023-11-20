@@ -50,3 +50,8 @@ CREATE TABLE IF NOT EXISTS athlete_in_school(
     FOREIGN KEY(school_id) REFERENCES school(id),
     PRIMARY KEY(athlete_id, school_id)
 );
+
+CREATE TABLE IF NOT EXISTS athlete_map(
+    x BIGINT PRIMARY KEY,
+    y BIGINT NOT NULL
+);

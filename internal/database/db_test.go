@@ -48,15 +48,19 @@ func TestGetMissingAthletes(t *testing.T) {
 			AthleteID: 789,
 		},
 	}
+	ids := make([]uint32, 3)
+	for i := 0; i < 3; i++ {
+		ids[i] = heat[i].AthleteID
+	}
 
-	missing_ids := db.GetMissingAthletes(heat)
+	missing_ids := db.GetMissingAthletes(ids)
 
 	expected := []uint32{123, 456, 789}
 	if len(missing_ids) != len(expected) {
 		t.Fail()
 	}
 	for i, exp := range expected {
-		if missing_ids[i] != exp {
+		if *missing_ids[i] != exp {
 			t.Fail()
 		}
 	}

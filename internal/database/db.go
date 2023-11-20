@@ -256,7 +256,7 @@ func insertResult(cur *sql.Tx, result internal.Result) error {
 }
 
 // We should process inserts heat-by-heat, since that is how the data is scraped
-func (db *BacticDB) InsertHeat(eventType int, meetID uint32, results []internal.Result) (uint32, error) {
+func (db *BacticDB) InsertHeat(eventType internal.EventType, meetID uint32, results []internal.Result) (uint32, error) {
 	// check to see if athlete exists
 	heatID := uuid.New().ID()
 	cur, err := db.DBConn.Begin()
@@ -275,7 +275,7 @@ func (db *BacticDB) InsertHeat(eventType int, meetID uint32, results []internal.
 		result.HeatID = heatID
 		if err = insertResult(cur, result); err != nil {
 			cur.Rollback()
-			return 0, fmt.Errorf("could not insert result: %s", err)
+			return 0, fmt.Errorf("could not insert result %v: %s", result, err)
 		}
 	}
 
@@ -287,16 +287,43 @@ func (db *BacticDB) InsertHeat(eventType int, meetID uint32, results []internal.
 	}
 }
 
-// For a list of results, check which atheletes are missing and return that list
-func (db *BacticDB) GetMissingAthletes(results []internal.Result) []uint32 {
-	missingID := make([]uint32, 0, len(results))
-	for _, result := range results {
-		_, found := db.getAthlete(result.AthleteID)
+/*
+Here's the plan:
+1. missing athletes takes the list of mapped ids, queries the database for their existence
+2. if the query exists, return its global id
+3. if the query doesn't exist, do something that signals such
+*/
+
+func (db *BacticDB) GetAthleteRelation(id uint32) (uint32, bool) {
+	row := db.DBConn.QueryRow("SELECT global_id FROM athlete_map WHERE instance_id = ?", id)
+	var global uint32
+	err := row.Scan(&id)
+	if err == sql.ErrNoRows {
+		return 0, false
+	} else if err != nil {
+		panic(err)
+	} else {
+		return global, true
+	}
+}
+
+// For a list of results, check which athletes are missing and return that list
+func (db *BacticDB) GetMissingAthletes(mappedIds []uint32) []*uint32 {
+	globalIDs := make([]*uint32, 0, len(mappedIds))
+	for _, id := range mappedIds {
+		global, found := db.GetAthleteRelation(id)
 		if !found {
-			missingID = append(missingID, result.AthleteID)
+			globalIDs = append(globalIDs, nil)
+		} else {
+			globalIDs = append(globalIDs, &global)
 		}
 	}
-	return missingID
+	return globalIDs
+}
+
+func (db *BacticDB) AddAthleteRelation(mapped uint32, global uint32) error {
+	_, err := db.DBConn.Exec("INSERT INTO athlete_map(global_id, instance_id) VALUES(?, ?)", global, mapped)
+	return err
 }
 
 func (db *BacticDB) InsertMeet(meet internal.Meet) error {

@@ -3,6 +3,7 @@ package tfrrs
 import (
 	"bactic/internal"
 	"bactic/internal/database"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -104,112 +105,132 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 	})
 
 	athleteCollector.OnHTML("h3.panel-title.large-title", func(e *colly.HTMLElement) {
-		// what info do we need?
 		c := cases.Title(language.AmericanEnglish)
 		athName := c.String(strings.Split(strings.TrimSpace(e.Text), "\n")[0])
 
-		// Currently, school is not a foreign key meaning it does not need to be populated on this scrape
+		/*
+			Athlete ID is a tough case because athlete name is not a unique identifier.
+			We instead need to use the tfrrs id mapping to verify our own ids. TFRRS
+			has link ids that map to a global id. This relation can be many-to-one,
+			meaning we need to create an id of our own and verify that the link ids
+			map to it before inserting the athlete into our database. By consistency,
+			we define our own global ids for our athletes, meaning we have an additional
+			mapping tfrrs id->bactic id which is one-to-one.
 
-		// schoolNameNode := e.DOM.Parent().Siblings().Next()
-		// schoolNameURL, exists := schoolNameNode.Attr("href")
-		// if exists == false {
-		// 	logger.Fatal("Could not find the href attribute in the athlete title line")
-		// }
-		//schoolNameURL = strings.TrimSpace(schoolNameURL)
-		//school, found := db.GetSchoolURL(schoolNameURL)
-		//if !found {
-		//    schoolCollector.Visit(schoolNameURL)
-
-		//	logger.Fatal("School not found, we should be able to find it:", schoolNameURL)
-		//}
-
-		athleteURL := e.Request.URL.String()
-		athleteID, err := parseAthleteIDFromURL(athleteURL)
-		if err != nil {
-			logger.Println(err)
-			return
-		}
-
-		ath := internal.Athlete{
-			ID:   athleteID,
-			Name: athName,
-		}
-		db.InsertAthlete(ath)
-	})
-}
-
-func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
-	logger := log.New(os.Stdout, "XC Collector", log.LUTC)
-
-	meetCollector := colly.NewCollector()
-	schoolCollector := colly.NewCollector()
-	athleteCollector := colly.NewCollector()
-	setupAthleteCollector(athleteCollector, db)
-	setupSchoolCollector(schoolCollector, db)
-
-	meetCollector.OnRequest(func(r *colly.Request) {
-		logger.Println("Visiting meet", r.URL)
-	})
-
-	meetCollector.OnHTML("div.row", func(h *colly.HTMLElement) {
-		resultsRows := h.DOM.Find("tbody>tr")
-		tableLength := resultsRows.Length()
-		if tableLength == 0 {
-			return
-		}
-
-		tableType, err := parseXCTableType(h.DOM.Find("div.custom-table-title-xc>h3").Text())
-		if err != nil {
-			logger.Fatal("Unable to parse this table type, which should not happen in XC", err)
-		}
-
-		rowLength := resultsRows.First().Children().Length()
-		table := make([][][]string, tableLength)
-
-		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i] = make([][]string, rowLength)
-			s.Children().Each(func(j int, r *goquery.Selection) {
-				// strip text and link if it exists
-				table[i][j] = make([]string, 0, 2)
-				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
-				href, found := r.Children().Attr("href")
-				if found {
-					table[i][j] = append(table[i][j], href)
-				}
-			})
-		})
-		// parse all information from table
-		resultTable, athleteURLs, schoolURLs := parseResultTable(table, logger, eventType)
-		logger.Printf("%v, %v", resultTable, eventType)
-		athletesToScrape := db.GetMissingAthletes(resultTable)
-		schoolsToScrape := db.GetMissingSchools(schoolURLs)
-
-		// visit schools before athletes due to the database relation dependencies
-		for _, url := range schoolsToScrape {
-			schoolCollector.Visit(url)
-		}
-
-		for _, athleteID := range athletesToScrape {
-			athleteCollector.Visit(athleteURLs[athleteID])
-		}
-
-		// populate the athlete-school relations
-		for i, url := range schoolURLs {
-			school, found := db.GetSchoolURL(url)
-			if !found {
-				logger.Fatal("We must be able to find the school", url)
-			}
-			db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID)
-		}
-
-		// once this is done, we can insert the heat
-		_, err = db.InsertHeat(eventType, meetID, resultTable)
+			Overall, the process of insertion is as follows:
+			1. verify that the link id maps to a global id in the mapping.
+			2. if so, get the global id from the mapping and return the mapped tfrrs id.
+				You are done
+			3. if not, you check to see if the global id is mapped in the table
+			4. if not, this is a new athlete. Create a new tfrrs id, map the link
+				to the global and then the global to the tfrrs id
+			5. if so, then this is not a new athlete. Add the mapped to global relation
+			in the mapping and then follow the global to tfrrs relation
+		*/
+		linkID, err := parseAthleteIDFromURL(e.Request.URL.String())
 		if err != nil {
 			panic(err)
 		}
+		TFRRSID, err := parseAthleteIDFromURL(e.Response.Request.URL.String())
+		if err != nil {
+			panic(err)
+		}
+
+		_, found := db.GetAthleteRelation(TFRRSID)
+		if !found {
+			global := uuid.New().ID()
+			if err = db.AddAthleteRelation(linkID, global); err != nil {
+				panic(err)
+			}
+			db.InsertAthlete(internal.Athlete{
+				ID:   global,
+				Name: athName,
+			})
+		} else {
+			if err = db.AddAthleteRelation(linkID, TFRRSID); err != nil {
+				panic(err)
+			}
+		}
 	})
-	return meetCollector
 }
+
+// func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
+// 	logger := log.New(os.Stdout, "XC Collector", log.LUTC)
+
+// 	meetCollector := colly.NewCollector()
+// 	schoolCollector := colly.NewCollector()
+// 	athleteCollector := colly.NewCollector()
+// 	setupAthleteCollector(athleteCollector, db)
+// 	setupSchoolCollector(schoolCollector, db)
+
+// 	meetCollector.OnRequest(func(r *colly.Request) {
+// 		logger.Println("Visiting meet", r.URL)
+// 	})
+
+// 	meetCollector.OnHTML("div.row", func(h *colly.HTMLElement) {
+// 		resultsRows := h.DOM.Find("tbody>tr")
+// 		tableLength := resultsRows.Length()
+// 		if tableLength == 0 {
+// 			return
+// 		}
+// 		header := strings.ToLower(h.DOM.Find("div.custom-table-title-xc>h3").Text())
+// 		// we do not parse team results
+// 		if strings.Contains(header, "team results") {
+// 			return
+// 		}
+
+// 		eventType, err := parseXCEventType(h.DOM.Find("div.custom-table-title-xc>h3").Text())
+// 		if err != nil {
+// 			logger.Fatal("Unable to parse this table type, which should not happen in XC", err)
+// 		}
+
+// 		rowLength := resultsRows.First().Children().Length()
+// 		table := make([][][]string, tableLength)
+
+// 		resultsRows.Each(func(i int, s *goquery.Selection) {
+// 			table[i] = make([][]string, rowLength)
+// 			s.Children().Each(func(j int, r *goquery.Selection) {
+// 				// strip text and link if it exists
+// 				table[i][j] = make([]string, 0, 2)
+// 				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
+// 				href, found := r.Children().Attr("href")
+// 				if found {
+// 					table[i][j] = append(table[i][j], href)
+// 				}
+// 			})
+// 		})
+// 		// parse all information from table
+// 		resultTable, athleteURLs, schoolURLs := parseResultTable(table, logger, eventType)
+// 		logger.Printf("%v, %v", resultTable, eventType)
+// 		athletesToScrape := db.GetMissingAthletes(resultTable)
+// 		schoolsToScrape := db.GetMissingSchools(schoolURLs)
+
+// 		// visit schools before athletes due to the database relation dependencies
+// 		for _, url := range schoolsToScrape {
+// 			schoolCollector.Visit(url)
+// 		}
+
+// 		for _, athleteID := range athletesToScrape {
+// 			athleteCollector.Visit(athleteURLs[athleteID])
+// 		}
+
+// 		// populate the athlete-school relations
+// 		for i, url := range schoolURLs {
+// 			school, found := db.GetSchoolURL(url)
+// 			if !found {
+// 				logger.Fatal("We must be able to find the school", url)
+// 			}
+// 			db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID)
+// 		}
+
+// 		// once this is done, we can insert the heat
+// 		_, err = db.InsertHeat(eventType, meetID, resultTable)
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 	})
+// 	return meetCollector
+// }
 
 func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
 
@@ -258,18 +279,26 @@ func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collect
 		})
 
 		// parse all information from table
-		resultTable, athleteURLs, schoolURLs := parseResultTable(table, logger, eventType)
-		logger.Printf("%v, %v", resultTable, eventType)
-		athletesToScrape := db.GetMissingAthletes(resultTable)
+		resultTable, athleteIDs, schoolURLs := parseResultTable(table, logger, eventType)
+		globalIDs := db.GetMissingAthletes(athleteIDs)
+		// follow the url and populate if the globalID is nil
+		for i, id := range globalIDs {
+			if id == nil {
+				athleteCollector.Visit(fmt.Sprintf("https://www.tfrrs.org/athletes/%v", athleteIDs[i]))
+				global, found := db.GetAthleteRelation(athleteIDs[i])
+				if !found {
+					panic("The key should have a global entry in the table")
+				}
+				resultTable[i].AthleteID = global
+			} else {
+				resultTable[i].AthleteID = *id
+			}
+		}
 		schoolsToScrape := db.GetMissingSchools(schoolURLs)
 
 		// visit schools before athletes due to the database relation dependencies
 		for _, url := range schoolsToScrape {
 			schoolCollector.Visit(url)
-		}
-
-		for _, athleteID := range athletesToScrape {
-			athleteCollector.Visit(athleteURLs[athleteID])
 		}
 
 		// populate the athlete-school relations

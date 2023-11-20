@@ -79,18 +79,15 @@ func parseTime(t string) (float32, error) {
 		if len(matches) != 4 {
 			return 0.0, errors.New("Time could not be parsed into expected format string: t")
 		}
-		minutes := parseInt64(matches[1])
-		seconds := parseInt64(matches[2])
-		millis := parseInt64(matches[3])
+		minutes := time.Duration(parseInt64(matches[1]))
+		seconds := time.Duration(parseInt64(matches[2]))
+		frac := time.Duration(parseInt64(matches[3])) * 10
 
-		time_minute := int64(time.Minute)
-		time_second := int64(time.Second)
-		time_millis := int64(time.Millisecond)
-		return float32(time.Duration(minutes*time_minute + seconds*time_second + millis*time_millis).Seconds()), nil
+		return float32((minutes*time.Minute + seconds*time.Second + frac*time.Millisecond).Seconds()), nil
 	}
 }
 
-var titleToEventEnum = map[string]int{
+var titleToEventEnum = map[string]internal.EventType{
 	"5000 meters":       internal.T5000M,
 	"5,000 meters":      internal.T5000M,
 	"100 meters":        internal.T100M,
@@ -120,7 +117,7 @@ var titleToEventEnum = map[string]int{
 }
 
 // Given an xc table header, return whether or not it is a summary
-func parseXCEventType(eventTitle string) (int, error) {
+func parseXCEventType(eventTitle string) (internal.EventType, error) {
 	eventTitle = strings.ToLower(eventTitle)
 	if strings.Contains("8k", eventTitle) {
 		return internal.XC_8K, nil
@@ -129,22 +126,22 @@ func parseXCEventType(eventTitle string) (int, error) {
 	} else if strings.Contains("6k", eventTitle) {
 		return internal.XC_6K, nil
 	} else {
-		return -1, errors.New("Event table could not be parsed for type")
+		return 0, errors.New("Event table could not be parsed for type")
 	}
 }
 
 // Given an event title, return the enumerated event
-func parseEvent(event_title string) (int, error) {
+func parseEvent(eventTitle string) (internal.EventType, error) {
 	sexRe := regexp.MustCompile(`Men's|Women's`)
 	trailingRe := regexp.MustCompile(`(Preliminaries|Finals)?(Heat {\d+})?`)
-	eventParsed := sexRe.ReplaceAllString(event_title, "")
+	eventParsed := sexRe.ReplaceAllString(eventTitle, "")
 	eventParsed = trailingRe.ReplaceAllString(eventParsed, "")
 	eventParsed = strings.TrimSpace(eventParsed)
 	eventParsed = strings.ToLower(eventParsed)
 
 	event_type, exists := titleToEventEnum[eventParsed]
 	if exists != true {
-		return 0, fmt.Errorf("The event title %s, which converts to key %s could not be mapped to an event", event_title, eventParsed)
+		return 0, fmt.Errorf("The event title %s, which converts to key %s could not be mapped to an event", eventTitle, eventParsed)
 	}
 
 	return event_type, nil
@@ -155,49 +152,48 @@ type ParseResult struct {
 	err    error
 }
 
-func parseResultTable(resultTable [][][]string, logger *log.Logger, eventType int) ([]internal.Result, map[uint32]string, []string) {
+func parseResultTable(resultTable [][][]string, logger *log.Logger, eventType internal.EventType) ([]internal.Result, []uint32, []string) {
 	ret := make([]internal.Result, 0, len(resultTable))
-	athleteURLs := make(map[uint32]string)
+	athleteIDs := make([]uint32, 0, len(resultTable))
 	schoolURLs := make([]string, 0, len(resultTable))
 
 	for _, row := range resultTable {
-		result, athleteURL, schoolURL, err := parseResultClass[eventType](row)
+		result, athleteID, schoolURL, err := parseResultClass[eventType](row)
 		if err != nil {
 			logger.Printf("Unable to parse event row due to error: %v. Ignoring", err)
 		} else {
 			ret = append(ret, result)
 			schoolURLs = append(schoolURLs, schoolURL)
-			athleteURLs[result.AthleteID] = athleteURL
+			athleteIDs = append(athleteIDs, athleteID)
 		}
 	}
-	return ret, athleteURLs, schoolURLs
+	return ret, athleteIDs, schoolURLs
 }
 
-func parseXCResult(row [][]string) (internal.Result, string, string, error) {
+func parseXCResult(row [][]string) (internal.Result, uint32, string, error) {
 	place, err := strconv.Atoi(row[0][0])
 	if err != nil {
-		return internal.Result{}, "", "", err
+		return internal.Result{}, 0, "", err
 	}
 
 	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
-		return internal.Result{}, "", "", nil
+		return internal.Result{}, 0, "", nil
 	}
 
 	time, err := parseTime(row[5][0])
 	if err != nil {
-		return internal.Result{}, "", "", nil
+		return internal.Result{}, 0, "", nil
 	}
 
 	return internal.Result{
-		Place:     place,
-		AthleteID: athleteID,
-		Quantity:  time,
-	}, row[1][1], row[3][1], nil
+		Place:    place,
+		Quantity: time,
+	}, athleteID, row[3][1], nil
 }
-func parseDistanceResult(row [][]string) (internal.Result, string, string, error) {
+func parseDistanceResult(row [][]string) (internal.Result, uint32, string, error) {
 	if len(row) < 5 {
-		return internal.Result{}, "", "", fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
+		return internal.Result{}, 0, "", fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
 	}
 	var (
 		err   error
@@ -207,30 +203,29 @@ func parseDistanceResult(row [][]string) (internal.Result, string, string, error
 	if len(row[0][0]) > 0 {
 		place, err = strconv.Atoi(row[0][0])
 		if err != nil {
-			return internal.Result{}, "", "", err
+			return internal.Result{}, 0, "", err
 		}
 	}
 
 	time, err := parseTime(row[4][0])
 	if err != nil {
-		return internal.Result{}, "", "", err
+		return internal.Result{}, 0, "", err
 	}
 
 	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
-		return internal.Result{}, "", "", err
+		return internal.Result{}, 0, "", err
 	}
 
 	return internal.Result{
-		Quantity:  time,
-		Place:     place,
-		AthleteID: athleteID,
-	}, row[1][1], row[3][1], nil
+		Quantity: time,
+		Place:    place,
+	}, athleteID, row[3][1], nil
 }
 
-func parseSprintsResult(row [][]string) (internal.Result, string, string, error) {
+func parseSprintsResult(row [][]string) (internal.Result, uint32, string, error) {
 	if len(row) < 5 {
-		return internal.Result{}, "", "", fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
+		return internal.Result{}, 0, "", fmt.Errorf("Distance result row %v is less than the correct length of 4", row)
 	}
 
 	var (
@@ -240,25 +235,24 @@ func parseSprintsResult(row [][]string) (internal.Result, string, string, error)
 	if len(row[0][0]) > 0 {
 		place, err = strconv.Atoi(row[0][0])
 		if err != nil {
-			return internal.Result{}, "", "", err
+			return internal.Result{}, 0, "", err
 		}
 	}
 
 	time, err := parseTime(row[4][0])
 	if err != nil {
-		return internal.Result{}, "", "", err
+		return internal.Result{}, 0, "", err
 	}
 
 	athleteID, err := parseAthleteIDFromURL(row[1][1])
 	if err != nil {
-		return internal.Result{}, "", "", err
+		return internal.Result{}, 0, "", err
 	}
 
 	return internal.Result{
-		Quantity:  time,
-		Place:     place,
-		AthleteID: athleteID,
-	}, row[1][1], row[3][1], nil
+		Quantity: time,
+		Place:    place,
+	}, athleteID, row[3][1], nil
 }
 
 func parseAthleteIDFromURL(athleteURL string) (uint32, error) {
@@ -296,11 +290,11 @@ func parseRelayResult(row []string) (internal.Result, error) {
 	}, nil
 }
 
-func notImplementedResult(row [][]string) (internal.Result, string, string, error) {
-	return internal.Result{}, "", "", errors.New("This result parser not yet implemented")
+func notImplementedResult(row [][]string) (internal.Result, uint32, string, error) {
+	return internal.Result{}, 0, "", errors.New("This result parser not yet implemented")
 }
 
-var parseResultClass = map[int](func([][]string) (internal.Result, string, string, error)){
+var parseResultClass = map[internal.EventType](func([][]string) (internal.Result, uint32, string, error)){
 	internal.T5000M:      parseDistanceResult,
 	internal.T100M:       parseSprintsResult,
 	internal.T200M:       parseSprintsResult,
