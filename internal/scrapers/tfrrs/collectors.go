@@ -194,7 +194,7 @@ func NewTFRRSXCCollector(db *database.BacticDB) *colly.Collector {
 
 		eventType, err := parseXCEventType(header)
 		if err != nil {
-			panic(err)
+			return
 		}
 
 		rowLength := resultsRows.First().Children().Length()

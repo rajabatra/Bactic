@@ -40,11 +40,9 @@ func (db *BacticDB) Histogram(eventType internal.EventType, nBuckets int) []int 
 }
 
 func (db *BacticDB) PersonalRecord(eventType internal.EventType, athID uint32) float32 {
-	// row, err := db.DBConn.Query("SELECT ")
-	return 0.0
+	panic("Not implemented!")
 }
 
 func (db *BacticDB) PersonalHistory(eventType internal.EventType, athID uint32) []float32 {
 	panic("Not implemented!")
-	return []float32{0.0}
 }
