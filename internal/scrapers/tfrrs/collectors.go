@@ -16,7 +16,13 @@ import (
 	"golang.org/x/text/language"
 )
 
-func setupRSSCollector(rootCollector *colly.Collector, meetCollector *colly.Collector, db *database.BacticDB) {
+// Create a new collector that reads
+func NewRSSCollector(db *database.BacticDB) *colly.Collector {
+	rootCollector := colly.NewCollector(colly.AllowURLRevisit())
+	//TODO: we may want to just create one collector eventually
+	xcCollector := NewTFRRSXCCollector(db)
+	tfCollector := NewTFRRSTrackCollector(db)
+
 	logger := log.New(os.Stdout, "XML RSS", log.LUTC)
 	logger.SetPrefix("XML Root Collector")
 
@@ -42,17 +48,33 @@ func setupRSSCollector(rootCollector *colly.Collector, meetCollector *colly.Coll
 			logger.Printf("Unable to parse date string, for meet %s, skipping", title)
 			return
 		}
+		meetID := uuid.New().ID()
 
 		if err = db.InsertMeet(internal.Meet{
-			ID:   uuid.New().ID(),
+			ID:   meetID,
 			Name: title,
 			Date: date,
 		}); err != nil {
 			panic(err)
 		}
+		ctx := colly.NewContext()
+		ctx.Put("MeetID", meetID)
+		if strings.Contains(link, "results/xc/") {
+			if err := xcCollector.Request("GET", link, nil, ctx, nil); err != nil {
+				panic(err)
+			}
+		} else if strings.Contains(link, "results/tf/") {
+			if err := tfCollector.Request("GET", link, nil, ctx, nil); err != nil {
+				panic(err)
+			}
+		} else {
+			panic("Unable to classify meet link as either tf or results")
+		}
 
-		meetCollector.Visit(link)
+		rootCollector.Visit(link)
 	})
+
+	return rootCollector
 }
 
 func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticDB) {
@@ -145,7 +167,7 @@ func setupAthleteCollector(athleteCollector *colly.Collector, db *database.Bacti
 	})
 }
 
-func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
+func NewTFRRSXCCollector(db *database.BacticDB) *colly.Collector {
 	logger := log.New(os.Stdout, "XC Collector", log.LUTC)
 
 	meetCollector := colly.NewCollector()
@@ -230,6 +252,7 @@ func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector 
 		}
 
 		// finally, insert the heat
+		meetID := h.Request.Ctx.GetAny("MeetID").(uint32)
 		_, err = db.InsertHeat(eventType, meetID, resultTable)
 		if err != nil {
 			panic(err)
@@ -238,8 +261,7 @@ func NewTFRRSXCCollector(db *database.BacticDB, meetID uint32) *colly.Collector 
 	return meetCollector
 }
 
-func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collector {
-
+func NewTFRRSTrackCollector(db *database.BacticDB) *colly.Collector {
 	logger := log.New(os.Stdout, "TF Collector", log.LUTC)
 
 	meetCollector := colly.NewCollector()
@@ -347,6 +369,7 @@ func NewTFRRSTrackCollector(db *database.BacticDB, meetID uint32) *colly.Collect
 		}
 
 		// once this is done, we can insert the heat
+		meetID := e.Request.Ctx.GetAny("MeetID").(uint32)
 		_, err = db.InsertHeat(eventType, meetID, resultTable)
 		if err != nil {
 			panic(err)
