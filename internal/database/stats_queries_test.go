@@ -6,7 +6,7 @@ import (
 
 // Test that we can create and query a global performance histogram
 func TestHistogram(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 
 	_, err := db.DBConn.Exec("PRAGMA foreign_keys = OFF")

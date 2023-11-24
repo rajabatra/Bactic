@@ -65,7 +65,7 @@ func (db *BacticDB) GetCrawls(results []internal.Result) []uint32 {
 }
 
 func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
-	row := db.DBConn.QueryRow("SELECT id, name FROM athlete WHERE id = ?", athID)
+	row := db.DBConn.QueryRow("SELECT id, name FROM athlete WHERE id = $1", athID)
 	var athlete internal.Athlete
 	err := row.Scan(&athlete.ID, &athlete.Name)
 	if err == sql.ErrNoRows {
@@ -74,7 +74,7 @@ func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
 		log.Fatal("Unable to unmarshal Athlete selection from sql database", err)
 	}
 
-	rows, err := db.DBConn.Query("SELECT school_id FROM athlete_in_school WHERE athlete_id = ?", athID)
+	rows, err := db.DBConn.Query("SELECT school_id FROM athlete_in_school WHERE athlete_id = $1", athID)
 	if err != nil && err != sql.ErrNoRows {
 		log.Fatal("Query to athlete-school-relation table failed", err)
 	}
@@ -98,7 +98,7 @@ func (db *BacticDB) getAthlete(athID uint32) (internal.Athlete, bool) {
 }
 
 func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
-	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE id = ?", schoolID)
+	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE id = $1", schoolID)
 	var school internal.School
 	if row.Err() == sql.ErrNoRows {
 		return school, false
@@ -107,7 +107,7 @@ func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
 	}
 
 	row.Scan(&school.ID, &school.Name, &school.Division)
-	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = $1", school.ID)
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
@@ -131,7 +131,7 @@ func (db *BacticDB) GetSchool(schoolID uint32) (internal.School, bool) {
 
 func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 	var school internal.School
-	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE url = ?", schoolURL)
+	row := db.DBConn.QueryRow("SELECT id, name, division FROM school WHERE url = $1", schoolURL)
 
 	err := row.Scan(&school.ID, &school.Name, &school.Division)
 	if err == sql.ErrNoRows {
@@ -140,7 +140,7 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 		panic(err)
 	}
 
-	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = ?", school.ID)
+	leagues, err := db.DBConn.Query("SELECT league_name FROM league WHERE school_id = $1", school.ID)
 	if err == sql.ErrNoRows {
 		return school, true
 	} else if err != nil {
@@ -163,7 +163,7 @@ func (db *BacticDB) GetSchoolURL(schoolURL string) (internal.School, bool) {
 
 func (db *BacticDB) InsertAthlete(ath internal.Athlete) error {
 	// We assume that the athlete's id has already been populated by the tfrrs id
-	_, err := db.DBConn.Exec("INSERT INTO athlete(id, name) VALUES(?, ?)", ath.ID, ath.Name)
+	_, err := db.DBConn.Exec("INSERT INTO athlete(id, name) VALUES($1, $2)", ath.ID, ath.Name)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (db *BacticDB) InsertAthlete(ath internal.Athlete) error {
 }
 
 func (db *BacticDB) GetAthlete(athID uint32) (internal.Athlete, bool) {
-	row := db.DBConn.QueryRow("SELECT name FROM athlete WHERE id = ?", athID)
+	row := db.DBConn.QueryRow("SELECT name FROM athlete WHERE id = $1", athID)
 	var ath internal.Athlete
 	if row.Err() == sql.ErrNoRows {
 		return ath, false
@@ -207,14 +207,14 @@ func (db *BacticDB) InsertSchool(school internal.School) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, err = cur.Exec("INSERT INTO school(id, name, division, url) VALUES(?, ?, ?, ?)", school.ID, school.Name, school.Division, school.URL)
+	_, err = cur.Exec("INSERT INTO school(id, name, division, url) VALUES($1, $2, $3, $4)", school.ID, school.Name, school.Division, school.URL)
 	if err != nil {
 		cur.Rollback()
 		return 0, err
 	}
 
 	for _, league := range school.Leagues {
-		_, err := cur.Exec("INSERT INTO league(school_id, league_name) VALUES(?, ?)", school.ID, league)
+		_, err := cur.Exec("INSERT INTO league(school_id, league_name) VALUES($1, $2)", school.ID, league)
 		if err != nil {
 			cur.Rollback()
 			return 0, err
@@ -232,7 +232,7 @@ func insertResult(cur *sql.Tx, result internal.Result) error {
 	id := uuid.New().ID()
 	result.ID = id
 	_, err := cur.Exec(`INSERT INTO result(id, heat_id, ath_id, pl, 
-        quant, wind_ms, stage) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        quant, wind_ms, stage) VALUES($1, $2, $3, $4, $5, $6, $7)`,
 		result.ID,
 		result.HeatID,
 		result.AthleteID,
@@ -251,7 +251,7 @@ func (db *BacticDB) InsertHeat(eventType internal.EventType, meetID uint32, resu
 	if err != nil {
 		return 0, err
 	}
-	_, err = cur.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES(?, ?, ?)", heatID, meetID, eventType)
+	_, err = cur.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES($1, $2, $3)", heatID, meetID, eventType)
 	if err != nil {
 		cur.Rollback()
 		return 0, fmt.Errorf("could not create heat table: %s", err)
@@ -283,7 +283,7 @@ Here's the plan:
 */
 
 func (db *BacticDB) GetAthleteRelation(id uint32) (uint32, bool) {
-	row := db.DBConn.QueryRow("SELECT y FROM athlete_map WHERE x = ?", id)
+	row := db.DBConn.QueryRow("SELECT y FROM athlete_map WHERE x = $1", id)
 	err := row.Scan(&id)
 	if err == sql.ErrNoRows {
 		return 0, false
@@ -308,12 +308,12 @@ func (db *BacticDB) GetTFRRSAthleteID(linkID uint32) (bacticID uint32, found boo
 }
 
 func (db *BacticDB) AddAthleteRelation(x uint32, y uint32) error {
-	_, err := db.DBConn.Exec("INSERT INTO athlete_map(x, y) VALUES(?, ?)", x, y)
+	_, err := db.DBConn.Exec("INSERT INTO athlete_map(x, y) VALUES($1, $2)", x, y)
 	return err
 }
 
 func (db *BacticDB) InsertMeet(meet internal.Meet) error {
-	_, err := db.DBConn.Exec("INSERT INTO meet(id, name, date, season) VALUES(?, ?, ?, ?)", meet.ID, meet.Name, meet.Date, meet.Season)
+	_, err := db.DBConn.Exec("INSERT INTO meet(id, name, date, season) VALUES($1, $2, $3, $4)", meet.ID, meet.Name, meet.Date, meet.Season)
 	return err
 }
 

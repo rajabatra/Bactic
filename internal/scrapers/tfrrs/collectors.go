@@ -231,7 +231,8 @@ func NewTFRRSXCCollector(db *database.BacticDB) *colly.Collector {
 			if found {
 				resultTable[i].AthleteID = tfrrsID
 			} else {
-				panic("Should be able to find tfrrs id after first pass")
+				// TODO: this error could be caused by a athlete does not exist error
+				panic(fmt.Sprintf("Should be able to find tfrrs id after first pass %d", link))
 			}
 		}
 		schoolsToScrape := db.GetMissingSchools(schoolURLs)

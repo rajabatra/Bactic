@@ -39,14 +39,13 @@ func TestScraperTFMeet(t *testing.T) {
 	if err := collector.Request("GET", "https://tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships", nil, ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-
-	// assert that we have inserted some values
+	// TODO: assert that we have inserted some values
 }
 
 func TestScraperXCMeet(t *testing.T) {
 	db := newDemoDB()
 
-	meetID := uint32(23218)
+	meetID := uint32(23293)
 	collector := tfrrs.NewTFRRSXCCollector(db)
 	db.InsertMeet(internal.Meet{
 		ID:     meetID,
@@ -56,7 +55,7 @@ func TestScraperXCMeet(t *testing.T) {
 	})
 	ctx := colly.NewContext()
 	ctx.Put("MeetID", meetID)
-	if err := collector.Request("GET", "https://tfrrs.org/results/xc/23218/2023_SCIAC_Cross_Country_Championships", nil, ctx, nil); err != nil {
+	if err := collector.Request("GET", "https://www.tfrrs.org/results/xc/23293/NCAA_Division_II_Cross_Country_Championships", nil, ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 

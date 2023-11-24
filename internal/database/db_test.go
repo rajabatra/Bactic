@@ -8,35 +8,31 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
-func setupDummyDB() *database.BacticDB {
-	db := database.NewBacticDB("sqlite3", ":memory:")
-	_, err := db.DBConn.Exec("PRAGMA foreign_keys = ON")
-	if err != nil {
-		panic(err)
-	}
+func setupTestDB() *database.BacticDB {
+	db := database.NewBacticDB("postgres", "postgres://postgres:pass@localhost:5432/bactic?sslmode=disable")
 	db.SetupSchema()
 	return db
 }
 
 func TestTables(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 
-	_, err := db.DBConn.Exec("INSERT INTO school(id, name, division, url) VALUES(?, ?, ?, ?)", 2, "school", 3, "abcdef")
+	_, err := db.DBConn.Exec("INSERT INTO school(id, name, division, url) VALUES($1, $2, $3, $4)", 2, "school", 3, "abcdef")
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = db.DBConn.Exec("INSERT INTO league(school_id, league_name) VALUES(?, ?)", 2, "test")
+	_, err = db.DBConn.Exec("INSERT INTO league(school_id, league_name) VALUES($1, $2)", 2, "test")
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestGetAthleteID(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	link1 := uuid.New().ID()
 	link2 := uuid.New().ID()
@@ -66,7 +62,7 @@ func TestGetAthleteID(t *testing.T) {
 }
 
 func TestInsertSchools(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	school := internal.School{
 		Leagues:  []string{"League"},
@@ -82,7 +78,7 @@ func TestInsertSchools(t *testing.T) {
 }
 
 func TestGetMissingSchools(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	schools := []string{"School1", "School2", "School3"}
 
@@ -98,7 +94,7 @@ func TestGetMissingSchools(t *testing.T) {
 }
 
 func TestInsertAthlete(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	ath := internal.Athlete{
 		ID:   5,
@@ -112,7 +108,7 @@ func TestInsertAthlete(t *testing.T) {
 }
 
 func TestGetSchoolURL(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	url := "https://www.tfrrs.org/school_b"
 	school := internal.School{
@@ -138,7 +134,7 @@ func TestGetSchoolURL(t *testing.T) {
 }
 
 func TestGetSchool(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	school := internal.School{
 		Leagues:  []string{"Conference", "League2"},
@@ -164,7 +160,7 @@ func TestGetSchool(t *testing.T) {
 	}
 }
 func TestGetAthlete(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	ath1 := internal.Athlete{
 		Name: "Ath1",
@@ -185,7 +181,7 @@ func TestGetAthlete(t *testing.T) {
 	}
 }
 func TestInsertHeat(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	ath1 := internal.Athlete{
 		Name: "Ath1",
@@ -233,7 +229,7 @@ func TestInsertHeat(t *testing.T) {
 	}
 }
 func TestAthleteSchoolRelation(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	ath1 := internal.Athlete{
 		Name: "Ath1",
@@ -271,7 +267,7 @@ func TestAthleteSchoolRelation(t *testing.T) {
 }
 
 func TestInsertMeet(t *testing.T) {
-	db := setupDummyDB()
+	db := setupTestDB()
 	defer db.TeardownSchema()
 	meet := internal.Meet{
 		ID:   1234,
