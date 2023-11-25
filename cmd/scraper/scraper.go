@@ -4,6 +4,7 @@ import (
 	"bactic/internal/database"
 	"bactic/internal/scrapers/tfrrs"
 	"context"
+	"database/sql"
 	"flag"
 	"log"
 	"os"
@@ -24,7 +25,7 @@ func main() {
 		found        bool
 		verbosity    int
 	)
-	validScrapers := map[string](func(*database.BacticDB, context.Context, *sync.WaitGroup, time.Duration)){
+	validScrapers := map[string](func(*sql.DB, context.Context, *sync.WaitGroup, time.Duration)){
 		"tfrrs": tfrrs.NewTFRRSScraper,
 		// "athnet": athnet.NewAthnetCollector,
 	}
@@ -45,10 +46,10 @@ func main() {
 	}
 
 	db := database.NewBacticDB("postgres", dbURL)
-	db.SetupSchema()
+	database.SetupSchema(db)
 	defer db.Close()
 
-	var scraperSet []func(*database.BacticDB, context.Context, *sync.WaitGroup, time.Duration)
+	var scraperSet []func(*sql.DB, context.Context, *sync.WaitGroup, time.Duration)
 
 	for _, s := range strings.Split(scrapersList, ",") {
 		scraper, found := validScrapers[s]

@@ -3,8 +3,10 @@ package tfrrs
 import (
 	"bactic/internal"
 	"bactic/internal/database"
+	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -17,11 +19,9 @@ import (
 )
 
 // Create a new collector that reads
-func NewRSSCollector(db *database.BacticDB) *colly.Collector {
+func NewRSSCollector(db *sql.DB) *colly.Collector {
 	rootCollector := colly.NewCollector(colly.AllowURLRevisit())
-	//TODO: we may want to just create one collector eventually
-	xcCollector := NewTFRRSXCCollector(db)
-	tfCollector := NewTFRRSTrackCollector(db)
+	meetCollector := NewMeetCollector()
 
 	logger := log.New(os.Stdout, "XML RSS", log.LUTC)
 	logger.SetPrefix("XML Root Collector")
@@ -32,6 +32,7 @@ func NewRSSCollector(db *database.BacticDB) *colly.Collector {
 	colly.AllowURLRevisit()(rootCollector)
 
 	rootCollector.OnXML("//item", func(x *colly.XMLElement) {
+
 		node := x.DOM.(*xmlquery.Node)
 		t := xmlquery.Find(node, "/title")
 		d := xmlquery.Find(node, "/description")
@@ -50,151 +51,73 @@ func NewRSSCollector(db *database.BacticDB) *colly.Collector {
 		}
 		meetID := uuid.New().ID()
 
-		if err = db.InsertMeet(internal.Meet{
+		tx, err := db.Begin()
+		if err != nil {
+			panic(err)
+		}
+
+		if err = database.InsertMeet(tx, internal.Meet{
 			ID:   meetID,
 			Name: title,
 			Date: date,
 		}); err != nil {
 			panic(err)
 		}
+
 		ctx := colly.NewContext()
 		ctx.Put("MeetID", meetID)
-		if strings.Contains(link, "results/xc/") {
-			if err := xcCollector.Request("GET", link, nil, ctx, nil); err != nil {
-				panic(err)
-			}
-		} else if strings.Contains(link, "results/tf/") {
-			if err := tfCollector.Request("GET", link, nil, ctx, nil); err != nil {
-				panic(err)
-			}
-		} else {
-			panic("Unable to classify meet link as either tf or results")
+		ctx.Put("tx", tx)
+		if err := meetCollector.Request("GET", link, nil, ctx, nil); err != nil {
+			panic(err)
 		}
 
-		rootCollector.Visit(link)
+		if err := tx.Commit(); err != nil {
+			panic(err)
+		}
 	})
-
 	return rootCollector
 }
 
-func setupSchoolCollector(schoolCollector *colly.Collector, db *database.BacticDB) {
-	logger := log.Default()
-	logger.SetPrefix("School Collector")
-
-	schoolCollector.OnRequest(func(r *colly.Request) {
-		logger.Println("School collector visiting school", r.URL)
-	})
-
-	schoolCollector.OnHTML("h3#team-name", func(h *colly.HTMLElement) {
-		titleCaser := cases.Title(language.AmericanEnglish)
-		teamName := titleCaser.String(strings.TrimSpace(h.Text))
-		division := -1
-		var leagues []string
-		h.DOM.Parent().Siblings().First().Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
-			d := parseDivision(s.Text())
-			if division >= 0 && d >= 0 && division != d {
-				logger.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
-			} else if d >= 0 {
-				division = d
-			} else {
-				leagues = append(leagues, strings.TrimSpace(s.Text()))
-			}
-		})
-
-		if division < 0 {
-			logger.Println("Could not parse a division from the school page", teamName)
-		}
-
-		school := internal.School{
-			Name:     teamName,
-			URL:      h.Request.URL.String(),
-			Division: division,
-			Leagues:  leagues,
-		}
-		_, err := db.InsertSchool(school)
-		if err != nil {
-			logger.Fatal("Error inserting school", err)
-		}
-	})
-}
-
-func setupAthleteCollector(athleteCollector *colly.Collector, db *database.BacticDB) {
-	logger := log.Default()
-	logger.SetPrefix("Athlete Collector")
-
-	athleteCollector.OnRequest(func(r *colly.Request) {
-		logger.Println("Athlete collector visiting athlete", r.URL)
-	})
-
-	athleteCollector.OnHTML("h3.panel-title.large-title", func(e *colly.HTMLElement) {
-		linkID, found := e.Request.Ctx.GetAny("linkID").(uint32)
-		if !found {
-			panic("The value linkID not found in request context")
-		}
-
-		tfrrsID, err := parseAthleteIDFromURL(e.Request.URL.String())
-		if err != nil {
-			panic(err)
-		}
-
-		_, found = db.GetAthleteRelation(tfrrsID)
-		if found {
-			if err := db.AddAthleteRelation(linkID, tfrrsID); err != nil {
-				panic(err)
-			}
-			return
-		}
-
-		bacticID := uuid.New().ID()
-		if err := db.AddAthleteRelation(tfrrsID, bacticID); err != nil {
-			panic(err)
-		}
-		if linkID != tfrrsID {
-			if err := db.AddAthleteRelation(linkID, tfrrsID); err != nil {
-				panic(err)
-			}
-		}
-
-		c := cases.Title(language.AmericanEnglish)
-		athName := c.String(strings.Split(strings.TrimSpace(e.Text), "\n")[0])
-
-		if err := db.InsertAthlete(internal.Athlete{
-			ID:   bacticID,
-			Name: athName,
-		}); err != nil {
-			panic(err)
-		}
-	})
-}
-
-func NewTFRRSXCCollector(db *database.BacticDB) *colly.Collector {
-	logger := log.New(os.Stdout, "XC Collector", log.LUTC)
+func NewMeetCollector() *colly.Collector {
+	logger := log.New(os.Stdout, "Meet Collector ", log.Ldate|log.Ltime)
 
 	meetCollector := colly.NewCollector()
-	schoolCollector := colly.NewCollector()
-	athleteCollector := colly.NewCollector()
-	setupAthleteCollector(athleteCollector, db)
-	setupSchoolCollector(schoolCollector, db)
 
 	meetCollector.OnRequest(func(r *colly.Request) {
-		logger.Println("Visiting meet", r.URL)
+		logger.Println("visiting meet", r.URL)
 	})
 
 	meetCollector.OnHTML("div.row", func(h *colly.HTMLElement) {
+		tx := h.Request.Ctx.GetAny("tx").(*sql.Tx)
 		resultsRows := h.DOM.Find("tbody>tr")
 		tableLength := resultsRows.Length()
 		if tableLength == 0 {
 			return
 		}
-		header := strings.ToLower(strings.Split(h.DOM.Find("div.custom-table-title-xc>h3").Text(), "\n")[0])
-		// TODO: we do not parse team results for now
-		if strings.Contains(header, "team results") {
-			return
-		}
 
-		eventType, err := parseXCEventType(header)
-		if err != nil {
-			return
+		url := h.Request.URL.String()
+		var (
+			eventType internal.EventType
+			err       error
+		)
+
+		if strings.Contains(url, "/xc/") {
+			header := strings.ToLower(strings.Split(h.DOM.Find("div.custom-table-title-xc>h3").Text(), "\n")[0])
+			// TODO: we do not parse team results for now
+			if strings.Contains(header, "team results") {
+				return
+			}
+
+			eventType, err = parseXCEventType(header)
+			if err != nil {
+				return
+			}
+		} else { // assume tf otherwise
+			eventType, err = parseEvent(h.DOM.Find("div.custom-table-title>h3").Text())
+			if err != nil {
+				logger.Println("Unable to parse this table type. Assuming a redundant heat table:", err)
+				return
+			}
 		}
 
 		rowLength := resultsRows.First().Children().Length()
@@ -213,100 +136,6 @@ func NewTFRRSXCCollector(db *database.BacticDB) *colly.Collector {
 				}
 			})
 		})
-		// parse all information from table
-		resultTable, linkIDs, schoolURLs := parseResultTable(table, logger, eventType)
-
-		for _, link := range linkIDs {
-			_, found := db.GetTFRRSAthleteID(link)
-			if !found {
-				ctx := colly.NewContext()
-				ctx.Put("linkID", link)
-				athleteCollector.Request("GET", fmt.Sprintf("https://www.tfrrs.org/athletes/%v", link), nil, ctx, nil)
-			}
-		}
-
-		// second pass, back-populate
-		for i, link := range linkIDs {
-			tfrrsID, found := db.GetTFRRSAthleteID(link)
-			if found {
-				resultTable[i].AthleteID = tfrrsID
-			} else {
-				// TODO: this error could be caused by a athlete does not exist error
-				panic(fmt.Sprintf("Should be able to find tfrrs id after first pass %d", link))
-			}
-		}
-		schoolsToScrape := db.GetMissingSchools(schoolURLs)
-
-		for _, url := range schoolsToScrape {
-			schoolCollector.Visit(url)
-		}
-
-		// populate athlete-school relations
-		for i, url := range schoolURLs {
-			school, found := db.GetSchoolURL(url)
-			if !found {
-				logger.Fatal("We must be able to find the school", url)
-			}
-			if err := db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID); err != nil {
-				panic(err)
-			}
-		}
-
-		// finally, insert the heat
-		meetID := h.Request.Ctx.GetAny("MeetID").(uint32)
-		_, err = db.InsertHeat(eventType, meetID, resultTable)
-		if err != nil {
-			panic(err)
-		}
-	})
-	return meetCollector
-}
-
-func NewTFRRSTrackCollector(db *database.BacticDB) *colly.Collector {
-	logger := log.New(os.Stdout, "TF Collector", log.LUTC)
-
-	meetCollector := colly.NewCollector()
-	schoolCollector := colly.NewCollector()
-	athleteCollector := colly.NewCollector()
-	setupAthleteCollector(athleteCollector, db)
-	setupSchoolCollector(schoolCollector, db)
-
-	meetCollector.OnRequest(func(r *colly.Request) {
-		logger.Println("Visiting meet", r.URL)
-	})
-
-	meetCollector.OnHTML("div.row", func(e *colly.HTMLElement) {
-		resultsRows := e.DOM.Find("tbody>tr")
-		tableLength := resultsRows.Length()
-		if tableLength == 0 {
-			return
-		}
-
-		// the header should be present under other circumstances
-		eventType, err := parseEvent(e.DOM.Find("div.custom-table-title>h3").Text())
-		if err != nil {
-			logger.Println("Unable to parse this table type. Assuming a redundant heat table:", err)
-			return
-		}
-
-		rowLength := resultsRows.First().Children().Length()
-		table := make([][][]string, tableLength)
-
-		// Collect into table struct
-		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i] = make([][]string, rowLength)
-			s.Children().Each(func(j int, r *goquery.Selection) {
-				// strip text and link if it exists
-				table[i][j] = make([]string, 0, 2)
-				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
-				href, found := r.Children().Attr("href")
-				if found {
-					table[i][j] = append(table[i][j], href)
-				}
-			})
-		})
-
-		// parse all information from table
 
 		/*
 			Athlete ID is a tough case because an athletes name is not a unique identifier.
@@ -330,51 +159,149 @@ func NewTFRRSTrackCollector(db *database.BacticDB) *colly.Collector {
 			5. if so, then this is not a new athlete. Add the mapped to global relation
 			in the mapping and then follow the global to tfrrs relation
 		*/
+		// parse all information from table
 		resultTable, linkIDs, schoolURLs := parseResultTable(table, logger, eventType)
+		validResults := make([]internal.Result, 0)
 
-		// first pass
-		for _, link := range linkIDs {
-			_, found := db.GetTFRRSAthleteID(link)
-			if !found {
-				ctx := colly.NewContext()
-				ctx.Put("linkID", link)
-				athleteCollector.Request("GET", fmt.Sprintf("https://www.tfrrs.org/athletes/%v", link), nil, ctx, nil)
-			}
-		}
-
-		// second pass, back-populate
 		for i, link := range linkIDs {
-			tfrrsID, found := db.GetTFRRSAthleteID(link)
-			if found {
-				resultTable[i].AthleteID = tfrrsID
-			} else {
-				panic("Should be able to find tfrrs id after first pass")
-			}
-		}
-		schoolsToScrape := db.GetMissingSchools(schoolURLs)
-
-		// visit schools before athletes due to the database relational dependencies
-		for _, url := range schoolsToScrape {
-			schoolCollector.Visit(url)
-		}
-
-		// populate the athlete-school relations
-		for i, url := range schoolURLs {
-			school, found := db.GetSchoolURL(url)
-			if !found {
-				logger.Fatal("We must be able to find the school", url)
-			}
-			if err := db.AddAthleteToSchool(resultTable[i].AthleteID, school.ID); err != nil {
+			id, err, httpError := checkAthlete(tx, link, logger)
+			if err != nil {
 				panic(err)
+			} else if httpError {
+				continue
+			}
+			resultTable[i].AthleteID = id
+			validResults = append(validResults, resultTable[i])
+
+			school := checkSchool(tx, schoolURLs[i], logger)
+			if err := database.AddAthleteToSchool(tx, resultTable[i].AthleteID, school.ID); err != nil {
+				logger.Panic(err, school.ID)
 			}
 		}
 
-		// once this is done, we can insert the heat
-		meetID := e.Request.Ctx.GetAny("MeetID").(uint32)
-		_, err = db.InsertHeat(eventType, meetID, resultTable)
+		// finally, insert the heat
+		meetID := h.Request.Ctx.GetAny("MeetID").(uint32)
+		_, err = database.InsertHeat(tx, eventType, meetID, validResults)
 		if err != nil {
 			panic(err)
 		}
 	})
 	return meetCollector
+}
+
+// How we scrape athletes since there are some scraping dependencies that are challenging to handle through collys functional scraping mechanisms
+func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint32, err error, httpError bool) {
+	tfrrsID, found := database.GetAthleteRelation(tx, linkID)
+	// if the link ID is in the table, we return what we find directly
+	if found {
+		bacticID, found := database.GetAthleteRelation(tx, tfrrsID)
+		if !found {
+			return tfrrsID, nil, false
+		} else {
+			return bacticID, nil, false
+		}
+	}
+
+	// otherwise, we follow the link to validate the tfrrs id
+	resp, err := http.Get(fmt.Sprintf("https://www.tfrrs.org/athletes/%v", linkID))
+	if err != nil {
+		panic(err)
+	} else if resp.StatusCode > 400 {
+		return 0, nil, true
+	}
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	tfrrsID, err = parseAthleteIDFromURL(resp.Request.URL.String())
+	if err != nil {
+		panic(err)
+	}
+
+	// we have a new reference to the same tfrrs id
+	bacticID, found := database.GetAthleteRelation(tx, tfrrsID)
+	if found {
+		if err = database.AddAthleteRelation(tx, linkID, tfrrsID); err != nil {
+			panic(err)
+		}
+		return bacticID, nil, false
+	}
+
+	// we have to create a new athlete
+	bacticID = uuid.New().ID()
+	if err := database.AddAthleteRelation(tx, tfrrsID, bacticID); err != nil {
+		panic(err)
+	}
+	if linkID != tfrrsID {
+		if err := database.AddAthleteRelation(tx, linkID, tfrrsID); err != nil {
+			panic(err)
+		}
+	}
+
+	c := cases.Title(language.AmericanEnglish)
+	h := doc.Selection.Find("h3.panel-title.large-title")
+	athName := c.String(strings.Split(strings.TrimSpace(h.Text()), "\n")[0])
+	logger.Printf("Found new athlete %s, scraping", athName)
+
+	if err := database.InsertAthlete(tx, internal.Athlete{
+		ID:   bacticID,
+		Name: athName,
+	}); err != nil {
+		panic(err)
+	}
+	return bacticID, nil, false
+}
+
+// checks the url string for existence. If not, scrape the school and then insert. Otherwise, insert the school
+func checkSchool(tx *sql.Tx, url string, logger *log.Logger) internal.School {
+	school, found := database.GetSchoolURL(tx, url)
+	if found {
+		return school
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	nameDiv := doc.Selection.Find("h3#team-name")
+	titleCaser := cases.Title(language.AmericanEnglish)
+	teamName := titleCaser.String(strings.TrimSpace(nameDiv.Text()))
+
+	division := -1
+	var leagues []string
+
+	nameDiv.Parent().Siblings().First().Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
+		d := parseDivision(s.Text())
+		if division >= 0 && d >= 0 && division != d {
+			log.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
+		} else if d >= 0 {
+			division = d
+		} else {
+			leagues = append(leagues, strings.TrimSpace(s.Text()))
+		}
+	})
+
+	if division < 0 {
+		logger.Println("Could not parse a division from the school page", teamName)
+	}
+
+	school = internal.School{
+		ID:       uuid.New().ID(),
+		Name:     teamName,
+		URL:      url,
+		Division: division,
+		Leagues:  leagues,
+	}
+
+	err = database.InsertSchool(tx, school)
+	if err != nil {
+		panic(err)
+	}
+	return school
 }

@@ -1,13 +1,13 @@
 package tfrrs
 
 import (
-	"bactic/internal/database"
 	"context"
+	"database/sql"
 	"sync"
 	"time"
 )
 
-func NewTFRRSScraper(db *database.BacticDB, ctx context.Context, wg *sync.WaitGroup, scrapeLoop time.Duration) {
+func NewTFRRSScraper(db *sql.DB, ctx context.Context, wg *sync.WaitGroup, scrapeLoop time.Duration) {
 	defer wg.Done()
 
 	// every day, we check the root page if we have finished scraping for the previous day (hopefully)
