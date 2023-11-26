@@ -13,3 +13,11 @@
 
 # go.sum should be committed
 !go.sum
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+# openapi artifacts
+.openapi*
+openapi*

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>TFRRS: Latest Results</title>
+    <description>Latest Results from TFRRS</description>
+    <copyright>2023 DirectAthletics, Inc.</copyright>
+    <language>en-us</language>
+    <webmaster>info@tfrrs.org</webmaster>
+    <managingEditor>info@tfrrs.org</managingEditor>
+    <link>https://www.tfrrs.org/results.rss</link>
+    <item>
+      <title>2023 SCIAC Cross Country Championships</title>
+      <description>October 28, 2023</description>
+      <link>https://tfrrs.org/results/xc/23218/2023_SCIAC_Cross_Country_Championships</link>
+    </item>
+    <item>
+      <title>2023 SCIAC TF Championships</title>
+      <description>April 29, 2023</description>
+      <link>https://tfrrs.org/results/79700/m/2023_SCIAC_TF_Championships</link>
+    </item>
+  </channel>
+</rss>

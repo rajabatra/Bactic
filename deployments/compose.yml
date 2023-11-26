@@ -3,32 +3,49 @@ version: '3.9'
 services:
   db:
     container_name: bactic_db
-    image: postgres
-    restart: always
-    env_file:
-      - variables.env
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=bactic
     ports:
       - '5432:5432'
     volumes:
       - db:/var/lib/postgreqsl/data
-
-  backend:
-    container_name: bactic_backend
-    build: src/bactic-backend
-    depends_on:
-      - db
-    ports:
-      - 8080:8080
-    environment:
-      - DATABASE_URL=postgres://postgres:pass@bactic_db:5432/bactic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   scraper:
-    build: src/scraper
+    container_name: bactic_scraper
+    build:
+      context: ../
+      dockerfile: Dockerfile.scraper
+    restart: always
     depends_on:
+      db:
+        condition: service_healthy
+    links:
       - db
-      - backend
-    env_file:
-      - variables.env
+    environment:
+      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+
+  site:
+    container_name: bactic_site
+    build:
+      context: ../
+      dockerfile: Dockerfile.web
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db 
+    environment:
+      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+    ports:
+      - 8080:8080
 volumes:
   db:
     driver: local

@@ -7,10 +7,17 @@ import (
 
 // Division types
 const (
-	DIII = 3
-	DII  = 2
-	DI   = 1
-	NAIA = 0
+	DIII = iota
+	DII  = iota
+	DI   = iota
+	NAIA = iota
+)
+
+// Seasons
+const (
+	XC      = iota
+	INDOOR  = iota
+	OUTDOOR = iota
 )
 
 var divisionToStr = map[int]string{
@@ -20,35 +27,40 @@ var divisionToStr = map[int]string{
 	NAIA: "NAIA",
 }
 
-// Event types
+// Event types (XC and TF)
+type EventType uint32
+
 const (
-	T5000M      = 0
-	T100M       = 1
-	T200M       = 2
-	T400M       = 3
-	T800M       = 4
-	T1500M      = 5
-	T10000M     = 6
-	T110H       = 7
-	T400H       = 8
-	T3000S      = 9
-	T3000M      = 20
-	T4X100      = 10
-	T4X400      = 11
-	HIGH_JUMP   = 12
-	VAULT       = 13
-	LONG_JUMP   = 14
-	TRIPLE_JUMP = 15
-	SHOT        = 16
-	DISCUS      = 17
-	HAMMER      = 18
-	JAV         = 19
-	DEC         = 21
-	HEPT        = 22
-	T100H       = 23
+	T5000M      = EventType(iota)
+	T100M       = EventType(iota)
+	T200M       = EventType(iota)
+	T400M       = EventType(iota)
+	T800M       = EventType(iota)
+	T1500M      = EventType(iota)
+	T10000M     = EventType(iota)
+	T110H       = EventType(iota)
+	T400H       = EventType(iota)
+	T3000S      = EventType(iota)
+	T3000M      = EventType(iota)
+	T4X100      = EventType(iota)
+	T4X400      = EventType(iota)
+	HIGH_JUMP   = EventType(iota)
+	VAULT       = EventType(iota)
+	LONG_JUMP   = EventType(iota)
+	TRIPLE_JUMP = EventType(iota)
+	SHOT        = EventType(iota)
+	DISCUS      = EventType(iota)
+	HAMMER      = EventType(iota)
+	JAV         = EventType(iota)
+	DEC         = EventType(iota)
+	HEPT        = EventType(iota)
+	T100H       = EventType(iota)
+	XC_6K       = EventType(iota)
+	XC_8K       = EventType(iota)
+	XC_10K      = EventType(iota)
 )
 
-var eventToStr = map[int]string{
+var eventToStr = map[EventType]string{
 	T5000M:      "5000m",
 	T100M:       "100m",
 	T200M:       "200m",
@@ -73,12 +85,15 @@ var eventToStr = map[int]string{
 	DEC:         "Decathlon",
 	HEPT:        "Heptathlon ",
 	T100H:       "100 Hurdles",
+	XC_10K:      "XC 10K",
+	XC_8K:       "XC 8K",
+	XC_6K:       "XC 6K",
 }
 
 // Event stages
 const (
-	PRELIM = 0
-	FINAL  = 1
+	PRELIM = iota
+	FINAL  = iota
 )
 
 var stageToString = map[int]string{
@@ -100,12 +115,11 @@ type Result struct {
 	ID        uint32
 	HeatID    uint32
 	AthleteID uint32
-	Type      uint8
-	Place     uint8
+	Place     int
 	// Either time in seconds or meters for distance respective of the event type
 	Quantity float32
 	WindMS   float32
-	Stage    uint8
+	Stage    int
 	Team     string
 	Members  []uint32
 }
@@ -117,7 +131,7 @@ func (m *Result) String() string {
 
 type Heat struct {
 	ID     uint32
-	Type   int
+	Type   EventType
 	MeetID uint32
 }
 
@@ -130,9 +144,10 @@ type School struct {
 }
 
 type Meet struct {
-	ID   uint32
-	Name string
-	Date time.Time
+	ID     uint32
+	Name   string
+	Season int
+	Date   time.Time
 }
 
 type Athlete struct {

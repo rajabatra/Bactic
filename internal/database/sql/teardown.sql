@@ -1,7 +1,8 @@
-DROP TABLE league;
-DROP TABLE result;
-DROP TABLE heat;
-DROP TABLE athlete_in_school;
-DROP TABLE athlete;
-DROP TABLE school;
-DROP TABLE meet;
+DROP TABLE IF EXISTS league;
+DROP TABLE IF EXISTS result;
+DROP TABLE IF EXISTS heat;
+DROP TABLE IF EXISTS athlete_in_school;
+DROP TABLE IF EXISTS athlete;
+DROP TABLE IF EXISTS school;
+DROP TABLE IF EXISTS meet;
+DROP TABLE IF EXISTS athlete_map;
