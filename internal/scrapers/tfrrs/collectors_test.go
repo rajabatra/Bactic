@@ -5,6 +5,7 @@ import (
 	"bactic/internal"
 	"bactic/internal/database"
 	"bactic/internal/scrapers/tfrrs"
+	"context"
 	"database/sql"
 	"net/http"
 	"testing"
@@ -38,7 +39,7 @@ func TestScraperTFMeet(t *testing.T) {
 	tx := newTx()
 
 	meetID := uint32(79700)
-	collector := tfrrs.NewMeetCollector()
+	collector := tfrrs.NewMeetCollector(context.Background())
 	database.InsertMeet(tx, internal.Meet{
 		ID:     meetID,
 		Name:   "2023 SCIAC TF Championships",
@@ -62,7 +63,7 @@ func TestScraperXCMeet(t *testing.T) {
 	tx := newTx()
 
 	meetID := uint32(23293)
-	collector := tfrrs.NewMeetCollector()
+	collector := tfrrs.NewMeetCollector(context.Background())
 	database.InsertMeet(tx, internal.Meet{
 		ID:     meetID,
 		Name:   "2023 SCIAC Cross Country Championships",
@@ -84,7 +85,7 @@ func TestScraperXCMeet(t *testing.T) {
 
 func TestScraperRoot(t *testing.T) {
 	db := newDB()
-	rss := tfrrs.NewRSSCollector(db)
+	rss := tfrrs.NewRSSCollector(db, context.Background())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "../../../test/tfrrs_test.rss")
 	})

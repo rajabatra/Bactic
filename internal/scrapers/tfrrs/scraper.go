@@ -14,10 +14,11 @@ func NewTFRRSScraper(db *sql.DB, ctx context.Context, wg *sync.WaitGroup, scrape
 	// if channel is signalled, wait for the current scraping meet to finish
 	// decrement wg when we are done
 
-	rssCollector := NewRSSCollector(db)
+	rssCollector := NewRSSCollector(db, ctx)
 
 	// await for current scraping to finish if interrupt signalled
 	scrapeTimer := time.NewTimer(0)
+
 	for {
 		select {
 		case <-ctx.Done():

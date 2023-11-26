@@ -3,6 +3,7 @@ package tfrrs
 import (
 	"bactic/internal"
 	"bactic/internal/database"
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -19,9 +20,9 @@ import (
 )
 
 // Create a new collector that reads
-func NewRSSCollector(db *sql.DB) *colly.Collector {
+func NewRSSCollector(db *sql.DB, ctx context.Context) *colly.Collector {
 	rootCollector := colly.NewCollector(colly.AllowURLRevisit())
-	meetCollector := NewMeetCollector()
+	meetCollector := NewMeetCollector(ctx)
 
 	logger := log.New(os.Stdout, "XML RSS", log.LUTC)
 	logger.SetPrefix("XML Root Collector")
@@ -32,53 +33,65 @@ func NewRSSCollector(db *sql.DB) *colly.Collector {
 	colly.AllowURLRevisit()(rootCollector)
 
 	rootCollector.OnXML("//item", func(x *colly.XMLElement) {
-
-		node := x.DOM.(*xmlquery.Node)
-		t := xmlquery.Find(node, "/title")
-		d := xmlquery.Find(node, "/description")
-		l := xmlquery.Find(node, "/link")
-		if len(t) != 1 || len(d) != 1 || len(l) != 1 {
-			logger.Println("Encountered malformed xml item for meet, not scraping")
+		select {
+		// ignore all xml meets when cancelled
+		case <-ctx.Done():
 			return
-		}
+		default:
 
-		link := strings.TrimSpace(l[0].InnerText())
-		date, err := parseMeetDate(strings.TrimSpace(d[0].InnerText()))
-		title := strings.TrimSpace(t[0].InnerText())
-		if err != nil {
-			logger.Printf("Unable to parse date string, for meet %s, skipping", title)
-			return
-		}
-		meetID := uuid.New().ID()
+			node := x.DOM.(*xmlquery.Node)
+			t := xmlquery.Find(node, "/title")
+			d := xmlquery.Find(node, "/description")
+			l := xmlquery.Find(node, "/link")
+			if len(t) != 1 || len(d) != 1 || len(l) != 1 {
+				logger.Println("Encountered malformed xml item for meet, not scraping")
+				return
+			}
 
-		tx, err := db.Begin()
-		if err != nil {
-			panic(err)
-		}
+			link := strings.TrimSpace(l[0].InnerText())
+			date, err := parseMeetDate(strings.TrimSpace(d[0].InnerText()))
+			title := strings.TrimSpace(t[0].InnerText())
+			if err != nil {
+				logger.Printf("Unable to parse date string, for meet %s, skipping", title)
+				return
+			}
+			meetID := uuid.New().ID()
 
-		if err = database.InsertMeet(tx, internal.Meet{
-			ID:   meetID,
-			Name: title,
-			Date: date,
-		}); err != nil {
-			panic(err)
-		}
+			tx, err := db.Begin()
+			if err != nil {
+				panic(err)
+			}
 
-		ctx := colly.NewContext()
-		ctx.Put("MeetID", meetID)
-		ctx.Put("tx", tx)
-		if err := meetCollector.Request("GET", link, nil, ctx, nil); err != nil {
-			panic(err)
-		}
+			if err = database.InsertMeet(tx, internal.Meet{
+				ID:   meetID,
+				Name: title,
+				Date: date,
+			}); err != nil {
+				panic(err)
+			}
 
-		if err := tx.Commit(); err != nil {
-			panic(err)
+			meetCtx := colly.NewContext()
+			meetCtx.Put("MeetID", meetID)
+			meetCtx.Put("tx", tx)
+			if err := meetCollector.Request("GET", link, nil, meetCtx, nil); err != nil {
+				panic(err)
+			}
+
+			// if we have cancelled, do not insert
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if err := tx.Commit(); err != nil {
+					panic(err)
+				}
+			}
 		}
 	})
 	return rootCollector
 }
 
-func NewMeetCollector() *colly.Collector {
+func NewMeetCollector(ctx context.Context) *colly.Collector {
 	logger := log.New(os.Stdout, "Meet Collector ", log.Ldate|log.Ltime)
 
 	meetCollector := colly.NewCollector()
@@ -164,18 +177,24 @@ func NewMeetCollector() *colly.Collector {
 		validResults := make([]internal.Result, 0)
 
 		for i, link := range linkIDs {
-			id, err, httpError := checkAthlete(tx, link, logger)
-			if err != nil {
-				panic(err)
-			} else if httpError {
-				continue
-			}
-			resultTable[i].AthleteID = id
-			validResults = append(validResults, resultTable[i])
+			select {
+			// this is the expensive step of the page scrape, meaning we cancel here when context.Done channel is closed
+			case <-ctx.Done():
+				return
+			default:
+				id, err, httpError := checkAthlete(tx, link, logger)
+				if err != nil {
+					panic(err)
+				} else if httpError {
+					continue
+				}
+				resultTable[i].AthleteID = id
+				validResults = append(validResults, resultTable[i])
 
-			school := checkSchool(tx, schoolURLs[i], logger)
-			if err := database.AddAthleteToSchool(tx, resultTable[i].AthleteID, school.ID); err != nil {
-				logger.Panic(err, school.ID)
+				school := checkSchool(tx, schoolURLs[i], logger)
+				if err := database.AddAthleteToSchool(tx, resultTable[i].AthleteID, school.ID); err != nil {
+					logger.Panic(err, school.ID)
+				}
 			}
 		}
 
