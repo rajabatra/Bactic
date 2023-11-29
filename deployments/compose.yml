@@ -30,6 +30,19 @@ services:
       - db
     environment:
       - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+  stats:
+    container_name: bactic_stats
+    build:
+      context: ../
+      dockerfile: Dockerfile.stats
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db
+    environment:
+      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
 
   site:
     container_name: bactic_site
