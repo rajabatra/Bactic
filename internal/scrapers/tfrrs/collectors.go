@@ -260,7 +260,9 @@ func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint
 
 	c := cases.Title(language.AmericanEnglish)
 	h := doc.Selection.Find("h3.panel-title.large-title")
-	athName := c.String(strings.Split(strings.TrimSpace(h.Text()), "\n")[0])
+	athFields := strings.Fields(h.Text())
+	athFields = athFields[:len(athFields)-1]
+	athName := c.String(strings.Join(athFields, " "))
 	logger.Printf("Found new athlete %s, scraping", athName)
 
 	if err := database.InsertAthlete(tx, internal.Athlete{
