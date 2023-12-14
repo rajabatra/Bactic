@@ -21,7 +21,7 @@ services:
     container_name: bactic_scraper
     build:
       context: ../
-      dockerfile: Dockerfile.scraper
+      dockerfile: build/scraper/Dockerfile
     restart: always
     depends_on:
       db:
@@ -35,7 +35,7 @@ services:
     container_name: bactic_stats
     build:
       context: ../
-      dockerfile: Dockerfile.stats
+      dockerfile: build/stats/Dockerfile
     restart: always
     depends_on:
       db:
@@ -64,7 +64,7 @@ services:
     container_name: bactic_site
     build:
       context: ../
-      dockerfile: Dockerfile.web
+      dockerfile: build/web/Dockerfile
     restart: always
     depends_on:
       db:
