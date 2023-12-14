@@ -100,6 +100,16 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 		logger.Println("visiting meet", r.URL)
 	})
 
+	meetCollector.OnHTML("body > div.page.container > div > div > div.panel-second-title > div > div.col-lg-8 > div:nth-child(2) > span.panel-heading-normal-text", func(h *colly.HTMLElement) {
+		h.DOM.Children().Each(func(i int, s *goquery.Selection) {
+			link, exists := s.Attr("href")
+			if !exists {
+				panic("A link to the track meet should exist")
+			}
+			h.Request.Visit(link)
+		})
+	})
+
 	meetCollector.OnHTML("div.row", func(h *colly.HTMLElement) {
 		tx := h.Request.Ctx.GetAny("tx").(*sql.Tx)
 		resultsRows := h.DOM.Find("tbody>tr")
