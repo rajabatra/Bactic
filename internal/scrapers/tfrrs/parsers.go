@@ -88,6 +88,7 @@ func parseTime(t string) (float32, error) {
 }
 
 var titleToEventEnum = map[string]internal.EventType{
+	"60 meters":         internal.T60M,
 	"5000 meters":       internal.T5000M,
 	"5,000 meters":      internal.T5000M,
 	"100 meters":        internal.T100M,
@@ -95,6 +96,7 @@ var titleToEventEnum = map[string]internal.EventType{
 	"400 meters":        internal.T400M,
 	"800 meters":        internal.T800M,
 	"1500 meters":       internal.T1500M,
+	"mile":              internal.T1MILE,
 	"10,000 meters":     internal.T10000M,
 	"110 hurdles":       internal.T110H,
 	"400 hurdles":       internal.T400H,
@@ -108,6 +110,7 @@ var titleToEventEnum = map[string]internal.EventType{
 	"long jump":         internal.LONG_JUMP,
 	"triple jump":       internal.TRIPLE_JUMP,
 	"shot put":          internal.SHOT,
+	"weight throw":      internal.WEIGHT_THROW,
 	"discus":            internal.DISCUS,
 	"hammer":            internal.HAMMER,
 	"javelin":           internal.JAV,
@@ -147,7 +150,12 @@ func parseEvent(eventTitle string) (internal.EventType, error) {
 	return event_type, nil
 }
 
-func parseResultTable(resultTable [][][]string, logger *log.Logger, eventType internal.EventType) ([]internal.Result, []uint32, []string) {
+type htmlElement struct {
+	text string
+	link string
+}
+
+func parseResultTable(resultTable [][]htmlElement, logger *log.Logger, eventType internal.EventType) (results []internal.Result, linkids []uint32, schoolurls []string) {
 	ret := make([]internal.Result, 0, len(resultTable))
 	athleteIDs := make([]uint32, 0, len(resultTable))
 	schoolURLs := make([]string, 0, len(resultTable))
@@ -165,22 +173,18 @@ func parseResultTable(resultTable [][][]string, logger *log.Logger, eventType in
 	return ret, athleteIDs, schoolURLs
 }
 
-func parseXCResult(row [][]string) (result internal.Result, athleteID uint32, schoolURL string, errRet error) {
-	place, err := strconv.Atoi(row[0][0])
+func parseXCResult(row []htmlElement) (result internal.Result, athleteID uint32, schoolURL string, errRet error) {
+	place, err := strconv.Atoi(row[0].text)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
 
-	if len(row[1]) < 2 {
-		return internal.Result{}, 0, "", errors.New("no url found")
-	}
-
-	athleteID, err = parseAthleteIDFromURL(row[1][1])
+	athleteID, err = parseAthleteIDFromURL(row[1].link)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
 
-	time, err := parseTime(row[5][0])
+	time, err := parseTime(row[5].text)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
@@ -188,27 +192,23 @@ func parseXCResult(row [][]string) (result internal.Result, athleteID uint32, sc
 	return internal.Result{
 		Place:    place,
 		Quantity: time,
-	}, athleteID, row[3][1], nil
+	}, athleteID, row[3].link, nil
 }
-func parseDistanceResult(row [][]string) (result internal.Result, athleteID uint32, schoolURL string, err error) {
+func parseDistanceResult(row []htmlElement) (result internal.Result, athleteID uint32, schoolURL string, err error) {
 	if len(row) < 5 {
 		return internal.Result{}, 0, "", fmt.Errorf("distance result row %v is less than the correct length of 4", row)
 	}
-	var place int
-
-	if len(row[0][0]) > 0 {
-		place, err = strconv.Atoi(row[0][0])
-		if err != nil {
-			return internal.Result{}, 0, "", err
-		}
-	}
-
-	time, err := parseTime(row[4][0])
+	place, err := strconv.Atoi(row[0].text)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
 
-	athleteID, err = parseAthleteIDFromURL(row[1][1])
+	time, err := parseTime(row[4].text)
+	if err != nil {
+		return internal.Result{}, 0, "", err
+	}
+
+	athleteID, err = parseAthleteIDFromURL(row[1].link)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
@@ -216,29 +216,25 @@ func parseDistanceResult(row [][]string) (result internal.Result, athleteID uint
 	return internal.Result{
 		Quantity: time,
 		Place:    place,
-	}, athleteID, row[3][1], nil
+	}, athleteID, row[3].link, nil
 }
 
-func parseSprintsResult(row [][]string) (result internal.Result, athleteID uint32, schoolURL string, err error) {
+func parseSprintsResult(row []htmlElement) (result internal.Result, athleteID uint32, schoolURL string, err error) {
 	if len(row) < 5 {
 		return internal.Result{}, 0, "", fmt.Errorf("distance result row %v is less than the correct length of 4", row)
 	}
 
-	var place int
-
-	if len(row[0][0]) > 0 {
-		place, err = strconv.Atoi(row[0][0])
-		if err != nil {
-			return internal.Result{}, 0, "", err
-		}
-	}
-
-	time, err := parseTime(row[4][0])
+	place, err := strconv.Atoi(row[0].text)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
 
-	athleteID, err = parseAthleteIDFromURL(row[1][1])
+	time, err := parseTime(row[4].text)
+	if err != nil {
+		return internal.Result{}, 0, "", err
+	}
+
+	athleteID, err = parseAthleteIDFromURL(row[1].link)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
@@ -246,15 +242,19 @@ func parseSprintsResult(row [][]string) (result internal.Result, athleteID uint3
 	return internal.Result{
 		Quantity: time,
 		Place:    place,
-	}, athleteID, row[3][1], nil
+	}, athleteID, row[3].link, nil
 }
 
 func parseAthleteIDFromURL(athleteURL string) (uint32, error) {
-	findID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
-	if len(findID) < 2 {
+	// if this is not a tfrrs id, return the nil reference
+	if len(athleteURL) == 0 || !strings.HasPrefix(athleteURL, "https://www.tfrrs.org/athletes/") {
+		return 0, nil // Return the nil reference id
+	}
+	findTFRRSID := regexp.MustCompile(`https://www.tfrrs.org/athletes/(\d+)`).FindStringSubmatch(athleteURL)
+	if len(findTFRRSID) < 2 {
 		return 0, fmt.Errorf("athlete url could not be searched for an id: %s", athleteURL)
 	}
-	athleteID, err := strconv.Atoi(findID[1])
+	athleteID, err := strconv.Atoi(findTFRRSID[1])
 	if err != nil {
 		return 0, fmt.Errorf("unable to convert athlete url into valid ID: %s", athleteURL)
 	}
@@ -262,7 +262,7 @@ func parseAthleteIDFromURL(athleteURL string) (uint32, error) {
 }
 
 // TODO: parse relay results has not been tested
-func parseRelayResult(row [][]string) (result internal.Result, athleteID uint32, schoolURL string, err error) {
+func parseRelayResult(row []htmlElement) (result internal.Result, athleteID uint32, schoolURL string, err error) {
 	if len(row) < 5 {
 		return internal.Result{}, 0, "", fmt.Errorf("relay result row %v is less than the correct length of 5", row)
 	}
@@ -271,14 +271,14 @@ func parseRelayResult(row [][]string) (result internal.Result, athleteID uint32,
 		return internal.Result{}, 0, "", fmt.Errorf("the row was less than length 4")
 	}
 
-	time, err := parseTime(row[3][0])
+	time, err := parseTime(row[3].text)
 	if err != nil {
 		return internal.Result{}, 0, "", err
 	}
 
 	err = nil
 	members := make([]uint32, 4)
-	for i, m := range strings.Split(row[2][0], ", ") {
+	for i, m := range strings.Split(row[2].link, ", ") {
 		members[i], err = parseAthleteIDFromURL(m)
 		if err != nil {
 			return internal.Result{}, 0, "", err
@@ -288,14 +288,15 @@ func parseRelayResult(row [][]string) (result internal.Result, athleteID uint32,
 	return internal.Result{
 		Quantity: time,
 		Members:  members,
-	}, 0, row[0][2], nil
+	}, 0, row[0].link, nil
 }
 
-func notImplementedResult(row [][]string) (internal.Result, uint32, string, error) {
+func notImplementedResult(row []htmlElement) (internal.Result, uint32, string, error) {
 	return internal.Result{}, 0, "", errors.New("this result parser not yet implemented")
 }
 
-var parseIndividualResultClass = map[internal.EventType](func([][]string) (result internal.Result, athleteID uint32, schoolURL string, err error)){
+var parseIndividualResultClass = map[internal.EventType](func([]htmlElement) (result internal.Result, athleteID uint32, schoolURL string, err error)){
+	internal.T60M:        parseSprintsResult,
 	internal.T5000M:      parseDistanceResult,
 	internal.T100M:       parseSprintsResult,
 	internal.T200M:       parseSprintsResult,

@@ -144,18 +144,17 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 		}
 
 		rowLength := resultsRows.First().Children().Length()
-		table := make([][][]string, tableLength)
+		table := make([][]htmlElement, tableLength)
 
 		// Collect table into struct indexed by row, column, (text, href)
 		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i] = make([][]string, rowLength)
+			table[i] = make([]htmlElement, rowLength)
 			s.Children().Each(func(j int, r *goquery.Selection) {
 				// strip text and link if it exists
-				table[i][j] = make([]string, 0, 2)
-				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
+				table[i][j].text = strings.TrimSpace(r.Text())
 				href, found := r.Children().Attr("href")
 				if found {
-					table[i][j] = append(table[i][j], href)
+					table[i][j].link = href
 				}
 			})
 		})
@@ -192,6 +191,13 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 			case <-ctx.Done():
 				return
 			default:
+				// If we have the null reference athlete ID
+				if link == 0 {
+					resultTable[i].AthleteID = 0
+					validResults = append(validResults, resultTable[i])
+					continue
+				}
+
 				id, err, httpError := checkAthlete(tx, link, logger)
 				if err != nil {
 					panic(err)

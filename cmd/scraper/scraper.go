@@ -41,7 +41,7 @@ func main() {
 	if len(dbURI) == 0 {
 		dbURI, found = os.LookupEnv("DB_URI")
 		if !found {
-			log.Fatal("Database url not found in environment variable DB_URL. It must be specified in the arg \"db\"")
+			log.Fatal("Database url not found in environment variable DB_URI. It must be specified in the arg \"db\"")
 		}
 	}
 
