@@ -100,6 +100,16 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 		logger.Println("visiting meet", r.URL)
 	})
 
+	meetCollector.OnHTML("body > div.page.container > div > div > div.panel-second-title > div > div.col-lg-8 > div:nth-child(2) > span.panel-heading-normal-text", func(h *colly.HTMLElement) {
+		h.DOM.Children().Each(func(i int, s *goquery.Selection) {
+			link, exists := s.Attr("href")
+			if !exists {
+				panic("A link to the track meet should exist")
+			}
+			h.Request.Visit(link)
+		})
+	})
+
 	meetCollector.OnHTML("div.row", func(h *colly.HTMLElement) {
 		tx := h.Request.Ctx.GetAny("tx").(*sql.Tx)
 		resultsRows := h.DOM.Find("tbody>tr")
@@ -134,18 +144,17 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 		}
 
 		rowLength := resultsRows.First().Children().Length()
-		table := make([][][]string, tableLength)
+		table := make([][]htmlElement, tableLength)
 
 		// Collect table into struct indexed by row, column, (text, href)
 		resultsRows.Each(func(i int, s *goquery.Selection) {
-			table[i] = make([][]string, rowLength)
+			table[i] = make([]htmlElement, rowLength)
 			s.Children().Each(func(j int, r *goquery.Selection) {
 				// strip text and link if it exists
-				table[i][j] = make([]string, 0, 2)
-				table[i][j] = append(table[i][j], strings.TrimSpace(r.Text()))
+				table[i][j].text = strings.TrimSpace(r.Text())
 				href, found := r.Children().Attr("href")
 				if found {
-					table[i][j] = append(table[i][j], href)
+					table[i][j].link = href
 				}
 			})
 		})
@@ -182,6 +191,13 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 			case <-ctx.Done():
 				return
 			default:
+				// If we have the null reference athlete ID
+				if link == 0 {
+					resultTable[i].AthleteID = 0
+					validResults = append(validResults, resultTable[i])
+					continue
+				}
+
 				id, err, httpError := checkAthlete(tx, link, logger)
 				if err != nil {
 					panic(err)
@@ -260,7 +276,9 @@ func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint
 
 	c := cases.Title(language.AmericanEnglish)
 	h := doc.Selection.Find("h3.panel-title.large-title")
-	athName := c.String(strings.Split(strings.TrimSpace(h.Text()), "\n")[0])
+	athFields := strings.Fields(h.Text())
+	athFields = athFields[:len(athFields)-1]
+	athName := c.String(strings.Join(athFields, " "))
 	logger.Printf("Found new athlete %s, scraping", athName)
 
 	if err := database.InsertAthlete(tx, internal.Athlete{

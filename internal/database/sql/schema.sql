@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS athlete(
     year INT
 );
 
+INSERT INTO athlete(id, name) VALUES(0, 'NULL') ON CONFLICT DO NOTHING; -- Null for results without an athlete profile
+
 CREATE TABLE IF NOT EXISTS meet(
     id BIGINT PRIMARY KEY,
     name VARCHAR NOT NULL,

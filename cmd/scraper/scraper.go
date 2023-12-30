@@ -21,7 +21,7 @@ func main() {
 	var (
 		scrapersList string
 		scrapeInt    time.Duration
-		dbURL        string
+		dbURI        string
 		found        bool
 		verbosity    int
 	)
@@ -31,21 +31,21 @@ func main() {
 	}
 
 	flag.StringVar(&scrapersList, "scrapers", "tfrrs", "Comma-separated list of scrapers to run concurrently. Any of \"tfrrs\" and \"athnet\"")
-	flag.StringVar(&dbURL, "db", "", "Fully-qualified postgres url. Overrides the environment variable defined in DB_URL")
+	flag.StringVar(&dbURI, "db", "", "Fully-qualified postgres url. Overrides the environment variable defined in DB_URL")
 	flag.IntVar(&verbosity, "verbosity", 1, "verbosity level (1, 2, 3)")
 	flag.DurationVar(&scrapeInt, "duration", time.Hour*24, "Interval between scrapes")
 	flag.Parse()
 
 	log.SetPrefix("Scraper main")
 
-	if len(dbURL) == 0 {
-		dbURL, found = os.LookupEnv("DB_URL")
+	if len(dbURI) == 0 {
+		dbURI, found = os.LookupEnv("DB_URI")
 		if !found {
-			log.Fatal("Database url not found in environment variable DB_URL. It must be specified in the arg \"db\"")
+			log.Fatal("Database url not found in environment variable DB_URI. It must be specified in the arg \"db\"")
 		}
 	}
 
-	db := database.NewBacticDB("postgres", dbURL)
+	db := database.NewBacticDB("postgres", dbURI)
 	database.SetupSchema(db)
 	defer db.Close()
 

@@ -86,12 +86,13 @@ func TestScraperXCMeet(t *testing.T) {
 func TestScraperRoot(t *testing.T) {
 	db := newDB()
 	rss := tfrrs.NewRSSCollector(db, context.Background())
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "../../../test/tfrrs_test.rss")
 	})
 	go http.ListenAndServe(":8080", nil)
 
-	if err := rss.Visit("http://127.0.0.1:8080"); err != nil {
+	if err := rss.Visit("http://localhost:8080"); err != nil {
 		panic(err)
 	}
 }

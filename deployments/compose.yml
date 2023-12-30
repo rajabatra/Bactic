@@ -21,7 +21,7 @@ services:
     container_name: bactic_scraper
     build:
       context: ../
-      dockerfile: Dockerfile.scraper
+      dockerfile: build/scraper/Dockerfile
     restart: always
     depends_on:
       db:
@@ -29,26 +29,42 @@ services:
     links:
       - db
     environment:
-      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+
   stats:
     container_name: bactic_stats
     build:
       context: ../
-      dockerfile: Dockerfile.stats
+      dockerfile: build/stats/Dockerfile
     restart: always
     depends_on:
       db:
         condition: service_healthy
+      stats-cache:
+        condition: service_healthy
     links:
       - db
+      - stats-cache
     environment:
-      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+      - CACHE_URI=redis://bactic_stats
+
+  stats-cache:
+    container_name: bactic_stats-cache
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   site:
     container_name: bactic_site
     build:
       context: ../
-      dockerfile: Dockerfile.web
+      dockerfile: build/web/Dockerfile
     restart: always
     depends_on:
       db:
@@ -56,9 +72,10 @@ services:
     links:
       - db 
     environment:
-      - DB_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
     ports:
       - 8080:8080
+      
 volumes:
   db:
     driver: local
