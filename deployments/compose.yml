@@ -75,6 +75,20 @@ services:
       - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
     ports:
       - 8080:8080
+
+  fastapi:
+    container_name: bactic_fastapi
+    build:
+      context: ../  # Update this path
+      dockerfile: build/stats/Dockerfile  # Update this if needed
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable  # Update this with your PostgreSQL URL
+    ports:
+      - 8000:8000  # Update the port if needed
       
 volumes:
   db:
