@@ -1,21 +1,20 @@
 # generate the api docs page
-FROM openapitools/openapi-generator-cli:v7.0.1 as apidocs
+# TODO: determine whether we need any of this apidocs generator stuff
+#FROM openapitools/openapi-generator-cli:v7.0.1 as apidocs
+#WORKDIR /usr/src/app
+#COPY ./api/openapi.yaml .
+#RUN bash /usr/local/bin/docker-entrypoint.sh generate -i openapi.yaml -g html2
+
+FROM node:21-alpine as build
 WORKDIR /usr/src/app
-COPY ./api/openapi.yaml .
-RUN bash /usr/local/bin/docker-entrypoint.sh generate -i openapi.yaml -g html2
+COPY ./web/package.json .
+RUN npm install
+COPY ./web .
+RUN npm run build
 
-FROM golang:1.21-alpine
-
-WORKDIR /usr/src/app
-
-COPY go.mod go.sum ./
-
-RUN go mod download && go mod verify
-
-# copy over api docs generated in previous stage
-COPY . .
-COPY --from=apidocs /usr/src/app/index.html ./web/api.html
-
-RUN go build -v -o /usr/local/bin/app ./cmd/site
-
-CMD ["app"]
+FROM node:21-alpine as runtime
+WORKDIR /srv
+COPY --from=build /usr/src/app/package.json  ./
+COPY --from=build /usr/src/app/build/ ./build 
+COPY --from=build /usr/src/app/node_modules ./node_modules
+CMD ["node", "build"]

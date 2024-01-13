@@ -1,14 +1,11 @@
-version: '3.9'
+version: "3.9"
 
 services:
   db:
     container_name: bactic_db
     image: postgres:15-alpine
-    environment:
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=bactic
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - db:/var/lib/postgreqsl/data
     healthcheck:
@@ -16,6 +13,28 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    env_file:
+      - "global.env"
+      - "db_params.env"
+
+  api:
+    container_name: bactic_api
+    build:
+      context: ../
+      dockerfile: build/api/Dockerfile
+    restart: always
+    ports:
+      - "6060:8080"
+    depends_on:
+      cache:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    links:
+      - cache
+      - db
+    env_file:
+      - "global.env"
 
   scraper:
     container_name: bactic_scraper
@@ -28,8 +47,8 @@ services:
         condition: service_healthy
     links:
       - db
-    environment:
-      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+    env_file:
+      - "global.env"
 
   stats:
     container_name: bactic_stats
@@ -40,42 +59,40 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      stats-cache:
+      cache:
         condition: service_healthy
     links:
       - db
-      - stats-cache
-    environment:
-      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
-      - CACHE_URI=redis://bactic_stats
+      - cache
+    env_file:
+      - "global.env"
 
-  stats-cache:
-    container_name: bactic_stats-cache
+  cache:
+    container_name: bactic_cache
     image: redis:7-alpine
     ports:
-      - '6379:6379'
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  site:
-    container_name: bactic_site
+  web:
+    container_name: bactic_web
     build:
       context: ../
       dockerfile: build/web/Dockerfile
     restart: always
     depends_on:
-      db:
-        condition: service_healthy
+      - api
     links:
-      - db 
-    environment:
-      - DB_URI=postgres://postgres:pass@bactic_db:5432/bactic?sslmode=disable
+      - api
+    env_file:
+      - "global.env"
     ports:
-      - 8080:8080
-      
+      - "8080:3000"
+
 volumes:
   db:
     driver: local

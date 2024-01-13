@@ -1,14 +1,14 @@
-FROM golang:1.21-alpine
-
-WORKDIR /usr/src/app
-
+FROM golang:1.21 AS build
+WORKDIR /go/src
 COPY go.mod go.sum ./
-
 RUN go mod download && go mod verify
-
 COPY . .
+ENV CGO_ENABLED=0
+RUN go build -v -o ./scraper ./cmd/scraper
 
-RUN go build -v -o /usr/local/bin/app ./cmd/scraper
-
-CMD ["app"]
+FROM scratch AS runtime
+WORKDIR /usr/bin
+COPY --from=build /go/src/scraper ./
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+CMD ["scraper"]
 
