@@ -11,17 +11,35 @@ package main
 
 import (
 	"bactic/internal/api"
+	"flag"
 	"log"
 	"net/http"
+	"os"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	log.Printf("Server started")
+	var (
+		dbURI string
+		found bool
+	)
+	flag.StringVar(&dbURI, "db", "", "Fully-qualified postgres url. Overrides the environment variable defined in DB_URL")
+	flag.Parse()
 
-	DefaultAPIService := api.NewDefaultAPIService()
+	if len(dbURI) == 0 {
+		dbURI, found = os.LookupEnv("DB_URI")
+		if !found {
+			log.Fatal("Database url not found in environment variable DB_URI. It must be specified in the arg \"db\"")
+		}
+	}
+
+	DefaultAPIService := api.NewDefaultAPIService(dbURI)
 	DefaultAPIController := api.NewDefaultAPIController(DefaultAPIService)
 
 	router := api.NewRouter(DefaultAPIController)
+
+	log.Printf("Server started")
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

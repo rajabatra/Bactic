@@ -1,0 +1,328 @@
+openapi: 3.1.0
+info:
+  title: Bactic
+  version: 0.1.0
+servers:
+  - url: /api/
+    description: the production and testing api server
+
+paths:
+  /search/athlete:
+    get:
+      description: Search for athlete name
+      parameters:
+        - description: the prefix of the search
+          explode: true
+          in: query
+          name: name
+          required: true
+          schema:
+            type: string
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/SearchItem"
+                type: array
+          description:
+            a list of the top 10 most similar name matches and their database
+            ids
+    parameters:
+      - description: the prefix of the search
+        explode: true
+        in: query
+        name: name
+        required: true
+        schema:
+          type: string
+        style: form
+  /stats/athlete/{id}:
+    get:
+      description: Get athlete summary
+      parameters:
+        - description: athlete id
+          explode: false
+          in: path
+          name: id
+          required: true
+          schema:
+            format: int64
+            type: integer
+          style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AthleteSummary"
+          description:
+            "a summary of an athlete's name, team names, summary statistics,\
+            \ best times and most recent results"
+    parameters:
+      - description: athlete id
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+  /stats/team/{id}:
+    get:
+      description: Get team summary
+      parameters:
+        - description: team id
+          explode: false
+          in: path
+          name: id
+          required: true
+          schema:
+            format: int64
+            type: integer
+          style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamSummary"
+          description:
+            "a summary of a team, including athletes that have competed\
+            \ for the team, recent performances, and a summary of their statistics"
+    parameters:
+      - description: team id
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+  /stats/hist:
+    get:
+      description: Get histogram
+      parameters:
+        - description: List of events
+          explode: true
+          in: query
+          name: events
+          required: false
+          schema:
+            items:
+              $ref: "#/components/schemas/Event"
+            type: array
+          style: form
+        - description: number of histogram buckets
+          explode: true
+          in: query
+          name: buckets
+          required: false
+          schema:
+            default: 10
+            format: float
+            type: number
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  format: float
+                  type: number
+                type: array
+          description: a histogram with buckets entries
+    parameters:
+      - description: List of events
+        explode: true
+        in: query
+        name: events
+        required: false
+        schema:
+          items:
+            $ref: "#/components/schemas/Event"
+          type: array
+        style: form
+      - description: number of histogram buckets
+        explode: true
+        in: query
+        name: buckets
+        required: false
+        schema:
+          default: 10
+          format: float
+          type: number
+        style: form
+  /stats/timeseries:
+    get:
+      description: Get a time series
+      parameters:
+        - description: event
+          explode: true
+          in: query
+          name: event
+          required: false
+          schema:
+            format: int64
+            type: integer
+          style: form
+        - description: start date
+          explode: true
+          in: query
+          name: start
+          required: true
+          schema:
+            type: string
+          style: form
+        - description: end date
+          explode: true
+          in: query
+          name: end
+          required: true
+          schema:
+            type: string
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/_stats_timeseries_get_200_response"
+          description: a time series of event history
+    parameters:
+      - description: event
+        explode: true
+        in: query
+        name: event
+        required: false
+        schema:
+          format: int64
+          type: integer
+        style: form
+      - description: start date
+        explode: true
+        in: query
+        name: start
+        required: true
+        schema:
+          type: string
+        style: form
+      - description: end date
+        explode: true
+        in: query
+        name: end
+        required: true
+        schema:
+          type: string
+        style: form
+components:
+  schemas:
+    TeamSummary:
+      example:
+        name: name
+        zscore: 6.0274563
+        athletes:
+          - name: name
+            id: 0
+          - name: name
+            id: 0
+        id: 0
+      properties:
+        name:
+          type: string
+        id:
+          format: int64
+          type: integer
+        zscore:
+          format: float
+          type: number
+        athletes:
+          items:
+            $ref: "#/components/schemas/Athlete"
+          type: array
+      required:
+        - id
+        - name
+    Athlete:
+      example:
+        name: name
+        id: 0
+      properties:
+        name:
+          type: string
+        id:
+          format: int64
+          type: integer
+    AthleteSummary:
+      example:
+        athlete:
+          name: name
+          id: 0
+        zscore: 6.0274563
+      properties:
+        athlete:
+          $ref: "#/components/schemas/Athlete"
+        zscore:
+          format: float
+          type: number
+    SearchItem:
+      example:
+        name: First Last
+        id: 1
+      properties:
+        name:
+          type: string
+        id:
+          format: int64
+          type: integer
+      required:
+        - id
+        - name
+    Event:
+      enum:
+        - 100m
+        - 200m
+        - 1500m
+        - 5000m
+      type: string
+    _stats_timeseries_get_200_response_data_inner:
+      example:
+        variance: 6.0274563
+        mean: 0.8008282
+      properties:
+        mean:
+          format: float
+          type: number
+        variance:
+          format: float
+          type: number
+      required:
+        - mean
+        - variance
+    _stats_timeseries_get_200_response:
+      example:
+        data:
+          - variance: 6.0274563
+            mean: 0.8008282
+          - variance: 6.0274563
+            mean: 0.8008282
+        axis:
+          - axis
+          - axis
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/_stats_timeseries_get_200_response_data_inner"
+          type: array
+        axis:
+          items:
+            type: string
+          type: array
+      required:
+        - axis
+        - data

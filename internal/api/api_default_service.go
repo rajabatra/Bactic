@@ -10,7 +10,9 @@
 package api
 
 import (
+	"bactic/internal/database"
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 )
@@ -18,22 +20,43 @@ import (
 // DefaultAPIService is a service that implements the logic for the DefaultAPIServicer
 // This service should implement the business logic for every endpoint for the DefaultAPI API.
 // Include any external packages or services that will be required by this service.
-type DefaultAPIService struct{}
+type DefaultAPIService struct {
+	searchTrie *Trie
+	db         *sql.DB
+}
 
 // NewDefaultAPIService creates a default api service
-func NewDefaultAPIService() DefaultAPIServicer {
-	return &DefaultAPIService{}
+func NewDefaultAPIService(dbURI string) DefaultAPIServicer {
+	db := database.NewBacticDB("postgres", dbURI)
+	trie := NewTrie()
+	trie.CaseInsensitive()
+	trie.WithNorm()
+
+	rows, err := db.Query("SELECT name FROM athlete")
+	if err != nil {
+		panic(err)
+	}
+
+	var (
+		name  string
+		names []string
+	)
+
+	for rows.Next() {
+		rows.Scan(&name)
+		names = append(names, name)
+	}
+
+	trie.Insert(names...)
+	return &DefaultAPIService{
+		searchTrie: trie,
+		db:         db,
+	}
 }
 
 // SearchAthleteGet -
 func (s *DefaultAPIService) SearchAthleteGet(ctx context.Context, name string) (ImplResponse, error) {
-	// TODO - update SearchAthleteGet with the required logic for this service method.
-	// Add api_default_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(200, []SearchItem{}) or use other options such as http.Ok ...
-	// return Response(200, []SearchItem{}), nil
-
-	return Response(http.StatusNotImplemented, nil), errors.New("SearchAthleteGet method not implemented")
+	return Response(http.StatusOK, s.searchTrie.Search(name, 10)), nil
 }
 
 // StatsAthleteIdGet -

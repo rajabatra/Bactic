@@ -1,16 +1,16 @@
 import type { Handle } from "@sveltejs/kit";
-const PROXY_PATH = "/api";
 import { env } from "$env/dynamic/private";
-import { error } from "@sveltejs/kit";
 
 const API_URL = env.API_URL;
+const PROXY_PATH = "/api";
 
 const handleApiProxy: Handle = async ({ event }) => {
-  const origin = event.request.headers.get("Origin");
+  //TODO: for now, there is no restriction on who can access the api
+  //const origin = event.request.headers.get("Origin");
 
-  if (!origin || new URL(origin).origin !== event.url.origin) {
-    throw error(403, "Request Forbidden.");
-  }
+  //if (!origin || new URL(origin).origin !== event.url.origin) {
+  //  throw error(403, "Request Forbidden.");
+  //}
 
   const strippedPath = event.url.pathname.substring(PROXY_PATH.length);
 
@@ -25,9 +25,6 @@ const handleApiProxy: Handle = async ({ event }) => {
     body: event.request.body,
     method: event.request.method,
     headers: event.request.headers,
-  }).catch((err) => {
-    console.log("Could not proxy API request: ", err);
-    throw err;
   });
 };
 
