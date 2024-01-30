@@ -222,6 +222,104 @@ paths:
         style: form
 components:
   schemas:
+    EventType:
+      type: string
+      nullable: false
+      enum:
+        - 60m
+        - 100m
+        - 200m
+        - 400m
+        - 800m
+        - 1500m
+        - 1mi
+        - 3000m
+        - 2mi
+        - 5000m
+        - 10000m
+        - 4x100m
+        - 4x400m
+        - high_jump
+        - vault
+        - long_jump
+        - triple_jump
+        - shot
+        - weight_throw
+        - discus
+        - hammer
+        - jav
+        - dec
+        - hept
+        - 100mh
+        - xc6k
+        - xc8k
+        - xc10k
+
+    Result:
+      properties:
+        id:
+          type: integer
+          format: int64
+        heat_id:
+          type: integer
+          format: int64
+        athlete_id:
+          type: integer
+          format: int64
+        place:
+          type: integer
+        quantity:
+          type: number
+          format: float
+        wind_ms:
+          type: number
+          format: float
+        stage:
+          type: integer
+        team:
+          type: string
+      required:
+        - id
+        - heat_id
+        - athlete_id
+        - place
+        - quantity
+
+    Heat:
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type:
+            $ref: "#/components/schemas/EventType"
+        meet_id:
+          type: number
+          format: int64
+      required:
+        - id
+        - type
+        - meet_id
+
+    School:
+      properties:
+        id:
+          type: integer
+          format: int46
+        name:
+          type: string
+        division:
+          type: integer
+        url:
+          type: string
+        leagues:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+
     TeamSummary:
       example:
         name: name

@@ -10,15 +10,17 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
+	"reflect"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // DefaultAPIController binds http requests to an api service and writes the service results to the http response
 type DefaultAPIController struct {
-	service      DefaultAPIServicer
+	service DefaultAPIServicer
 	errorHandler ErrorHandler
 }
 
@@ -50,34 +52,34 @@ func NewDefaultAPIController(s DefaultAPIServicer, opts ...DefaultAPIOption) Rou
 func (c *DefaultAPIController) Routes() Routes {
 	return Routes{
 		"SearchAthleteGet": Route{
-			c.SearchAthleteGet,
 			strings.ToUpper("Get"),
-			"/search/athlete",
+			"/api/search/athlete",
+			c.SearchAthleteGet,
 		},
 		"StatsAthleteIdGet": Route{
-			c.StatsAthleteIdGet,
 			strings.ToUpper("Get"),
-			"/stats/athlete/{id}",
+			"/api/stats/athlete/{id}",
+			c.StatsAthleteIdGet,
 		},
 		"StatsHistGet": Route{
-			c.StatsHistGet,
 			strings.ToUpper("Get"),
-			"/stats/hist",
+			"/api/stats/hist",
+			c.StatsHistGet,
 		},
 		"StatsTeamIdGet": Route{
-			c.StatsTeamIdGet,
 			strings.ToUpper("Get"),
-			"/stats/team/{id}",
+			"/api/stats/team/{id}",
+			c.StatsTeamIdGet,
 		},
 		"StatsTimeseriesGet": Route{
-			c.StatsTimeseriesGet,
 			strings.ToUpper("Get"),
-			"/stats/timeseries",
+			"/api/stats/timeseries",
+			c.StatsTimeseriesGet,
 		},
 	}
 }
 
-// SearchAthleteGet -
+// SearchAthleteGet - 
 func (c *DefaultAPIController) SearchAthleteGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var nameParam string
@@ -99,7 +101,7 @@ func (c *DefaultAPIController) SearchAthleteGet(w http.ResponseWriter, r *http.R
 	EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsAthleteIdGet -
+// StatsAthleteIdGet - 
 func (c *DefaultAPIController) StatsAthleteIdGet(w http.ResponseWriter, r *http.Request) {
 	idParam, err := parseNumericParameter[int64](
 		chi.URLParam(r, "id"),
@@ -119,7 +121,7 @@ func (c *DefaultAPIController) StatsAthleteIdGet(w http.ResponseWriter, r *http.
 	EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsHistGet -
+// StatsHistGet - 
 func (c *DefaultAPIController) StatsHistGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var eventsParam []Event
@@ -161,7 +163,7 @@ func (c *DefaultAPIController) StatsHistGet(w http.ResponseWriter, r *http.Reque
 	EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsTeamIdGet -
+// StatsTeamIdGet - 
 func (c *DefaultAPIController) StatsTeamIdGet(w http.ResponseWriter, r *http.Request) {
 	idParam, err := parseNumericParameter[int64](
 		chi.URLParam(r, "id"),
@@ -181,7 +183,7 @@ func (c *DefaultAPIController) StatsTeamIdGet(w http.ResponseWriter, r *http.Req
 	EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsTimeseriesGet -
+// StatsTimeseriesGet - 
 func (c *DefaultAPIController) StatsTimeseriesGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var startParam string

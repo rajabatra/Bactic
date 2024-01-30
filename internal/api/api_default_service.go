@@ -10,11 +10,10 @@
 package api
 
 import (
-	"bactic/internal/database"
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
+	"errors"
+	"reflect"
 )
 
 // DefaultAPIService is a service that implements the logic for the DefaultAPIServicer
@@ -32,22 +31,22 @@ func NewDefaultAPIService(dbURI string) DefaultAPIServicer {
 	trie.CaseInsensitive()
 	trie.WithNorm()
 
-	rows, err := db.Query("SELECT name FROM athlete")
+	rows, err := db.Query("SELECT name, id FROM athlete")
 	if err != nil {
 		panic(err)
 	}
 
 	var (
-		name  string
-		names []string
+		a        internal.Athlete
+		athletes []internal.Athlete
 	)
 
 	for rows.Next() {
-		rows.Scan(&name)
-		names = append(names, name)
+		rows.Scan(&a.Name, &a.ID)
+		athletes = append(athletes, a)
 	}
 
-	trie.Insert(names...)
+	trie.Insert(athletes...)
 	return &DefaultAPIService{
 		searchTrie: trie,
 		db:         db,

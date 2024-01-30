@@ -1,9 +1,4 @@
 # generate the api docs page
-# TODO: determine whether we need any of this apidocs generator stuff
-#FROM openapitools/openapi-generator-cli:v7.0.1 as apidocs
-#WORKDIR /usr/src/app
-#COPY ./api/openapi.yaml .
-#RUN bash /usr/local/bin/docker-entrypoint.sh generate -i openapi.yaml -g html2
 
 FROM node:21-alpine as build
 WORKDIR /usr/src/app

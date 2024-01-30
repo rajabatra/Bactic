@@ -12,23 +12,22 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"time"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 // A Route defines the parameters for an api endpoint
 type Route struct {
+	Method	  string
+	Pattern	 string
 	HandlerFunc http.HandlerFunc
-	Method      string
-	Pattern     string
 }
 
 // Routes is a map of defined api endpoints
@@ -39,11 +38,9 @@ type Router interface {
 	Routes() Routes
 }
 
-const (
-	errMsgRequiredMissing    = "required parameter is missing"
-	errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
-	errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
-)
+const errMsgRequiredMissing = "required parameter is missing"
+const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
+const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
 // NewRouter creates a new router for any number of api routers
 func NewRouter(routers ...Router) chi.Router {
@@ -51,7 +48,8 @@ func NewRouter(routers ...Router) chi.Router {
 	router.Use(middleware.Logger)
 	for _, api := range routers {
 		for _, route := range api.Routes() {
-			var handler http.Handler = route.HandlerFunc
+			var handler http.Handler
+			handler = route.HandlerFunc
 			router.Method(route.Method, route.Pattern, handler)
 		}
 	}
@@ -144,7 +142,7 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 	if err != nil {
 		return nil, err
 	}
-
+	
 	return file, nil
 }
 

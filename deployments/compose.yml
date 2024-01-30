@@ -35,6 +35,12 @@ services:
       - db
     env_file:
       - "global.env"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../internal/api/
+        - action: rebuild
+          path: ../cmd/api/
 
   scraper:
     container_name: bactic_scraper
@@ -49,23 +55,12 @@ services:
       - db
     env_file:
       - "global.env"
-
-  stats:
-    container_name: bactic_stats
-    build:
-      context: ../
-      dockerfile: build/stats/Dockerfile
-    restart: always
-    depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
-    links:
-      - db
-      - cache
-    env_file:
-      - "global.env"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../internal/scrapers
+        - action: rebuild
+          path: ../cmd/scraper
 
   cache:
     container_name: bactic_cache

@@ -9,18 +9,25 @@
 
 package api
 
+
+
+
 type TeamSummary struct {
-	Name     string    `json:"name"`
+
+	Name string `json:"name"`
+
+	Id int64 `json:"id"`
+
+	Zscore float32 `json:"zscore,omitempty"`
+
 	Athletes []Athlete `json:"athletes,omitempty"`
-	Id       int64     `json:"id"`
-	Zscore   float32   `json:"zscore,omitempty"`
 }
 
 // AssertTeamSummaryRequired checks if the required fields are not zero-ed
 func AssertTeamSummaryRequired(obj TeamSummary) error {
 	elements := map[string]interface{}{
 		"name": obj.Name,
-		"id":   obj.Id,
+		"id": obj.Id,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {

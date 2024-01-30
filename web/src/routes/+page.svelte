@@ -1,20 +1,96 @@
-<h2 class="page-title">Bactic stats</h2>
-<p class="page-subtitle">
-  The all-in-one running statistics site for letsrun enjoyers and collegiate
-  running enthusiasts
-</p>
+<script lang="ts">
+  import {
+    Configuration,
+    DefaultApi,
+    type SearchItem as SearchItemStruct,
+  } from "$lib/api";
+  import SearchItem from "./SearchItem.svelte";
 
-<!-- Stats Page -->
-<section id="page-stats" class="hidden main-content">
-  <div class="page-container">
-    <div class="stats-header">
-      A collection of global statistical analyses for the entire Bactic database
-    </div>
-  </div>
-</section>
+  import { api } from "./store";
 
-<section class="hidden main-content" id="page-about">
-  <p>
-    Bactic is a stats aggregator site like several others but it has some twists
-  </p>
-</section>
+  let conf = new Configuration({
+    basePath: "/",
+  });
+
+  let filteredAthletes: SearchItemStruct[];
+  let inputValue: string;
+
+  let searchRefresh = false;
+  const filterAthletes = async () => {
+    if (!searchRefresh) {
+      filteredAthletes = await api.searchAthleteGet({ name: inputValue });
+      searchRefresh = true;
+      setTimeout(() => {
+        searchRefresh = false;
+      }, 1000);
+    }
+  };
+
+  $: if (!inputValue) {
+    filteredAthletes = [];
+  } else {
+    highlightedAthlete = filteredAthletes[highlightedIndex];
+  }
+  let highlightedAthlete: SearchItemStruct;
+  let highlightedIndex: number;
+
+  const submitValue = () => {};
+
+  const statsPages = await api.getAllStatsTests();
+</script>
+
+<div class="landing">
+  <section class="search">
+    <form autocomplete="off" on:submit|preventDefault={submitValue}>
+      <div class="autocomplete">
+        <input
+          type="text"
+          id="athlete-input"
+          placeholder="Search athlete, team, division, or conference"
+          bind:value={inputValue}
+          on:input={filterAthletes}
+        />
+      </div>
+
+      <input type="submit" />
+
+      {#if filteredAthletes.length > 0}
+        <ul id="autocomplete-items-list">
+          {#each filteredAthletes as athlete, i}
+            <SearchItem item={athlete} highlighted={i === highlightedIndex} />
+          {/each}
+        </ul>
+      {/if}
+    </form>
+  </section>
+  <section class="article-summaries">
+    {#each statsPages as article, i}
+      <StatsArticle />
+    {/each}
+  </section>
+</div>
+
+<style>
+  div.autocomplete {
+    position: relative;
+    display: inline-block;
+    width: 300px;
+  }
+
+  input {
+    border: 1px solid transparent;
+    border-radius: 20px;
+    background-color: #f1f1f1;
+    padding: 10px;
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .landing {
+    text-align: center;
+  }
+
+  .article-summaries {
+    display: grid;
+  }
+</style>

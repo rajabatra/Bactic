@@ -5,15 +5,17 @@ go 1.21.1
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/antchfx/xmlquery v1.3.18
+	github.com/aws/aws-cdk-go/awscdk v1.204.0-devpreview
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.114.1
 	github.com/aws/constructs-go/constructs/v10 v10.3.0
 	github.com/aws/jsii-runtime-go v1.92.0
 	github.com/gocolly/colly v1.2.0
 	github.com/google/uuid v1.4.0
 	github.com/lib/pq v1.10.9
-	github.com/sethvargo/go-password v0.2.0
 	golang.org/x/text v0.14.0
 )
+
+require github.com/aws/constructs-go/constructs/v3 v3.4.232 // indirect
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect

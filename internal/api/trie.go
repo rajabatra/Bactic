@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bactic/internal"
 	"strings"
 	"unicode"
 
@@ -47,34 +48,36 @@ func (t *Trie) CaseInsensitive() {
 	t.casesensitive = false
 }
 
-func (t *Trie) Insert(entries ...string) {
+func (t *Trie) Insert(entries ...internal.Athlete) {
 	transformer := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	for _, entry := range entries {
-		if len(entry) == 0 {
+		name := entry.Name
+		if len(name) == 0 {
 			continue
 		}
 
 		if t.normalization {
-			normal, _, err := transform.String(transformer, entry)
+			normal, _, err := transform.String(transformer, name)
 			if err != nil {
 				panic(err) // TODO: determine behavior
 			}
-			entry = normal
+			name = normal
 		}
 
 		if !t.casesensitive {
-			entry = strings.ToLower(entry)
+			name = strings.ToLower(name)
 		}
 
 		currentNode := t.root
-		for i, c := range entry {
+		for i, c := range name {
 			child, ok := currentNode.children[c]
 			if !ok {
 				child = new(node)
 				child.children = make(map[rune]*node)
-				if i == len(entry)-len(string(c)) {
+				if i == len(name)-len(string(c)) {
 					child.values = append(child.values, SearchItem{
-						Name: entry,
+						Name: name,
+						Id:   int64(entry.ID),
 					})
 				}
 				currentNode.children[c] = child
