@@ -10,6 +10,7 @@
 package api
 
 import (
+	"bactic/internal"
 	"context"
 	"net/http"
 )
@@ -30,9 +31,9 @@ type DefaultAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DefaultAPIServicer interface {
-	SearchAthleteGet(context.Context, string) (ImplResponse, error)
-	StatsAthleteIdGet(context.Context, int64) (ImplResponse, error)
-	StatsHistGet(context.Context, []Event, float32) (ImplResponse, error)
-	StatsTeamIdGet(context.Context, int64) (ImplResponse, error)
-	StatsTimeseriesGet(context.Context, string, string, int64) (ImplResponse, error)
+	SearchAthleteGet(context.Context, string) (internal.ImplResponse, error)
+	StatsAthleteIdGet(context.Context, int64) (internal.ImplResponse, error)
+	StatsHistGet(context.Context, []internal.EventType, float32) (internal.ImplResponse, error)
+	StatsTeamIdGet(context.Context, int64) (internal.ImplResponse, error)
+	StatsTimeseriesGet(context.Context, string, string, int64) (internal.ImplResponse, error)
 }

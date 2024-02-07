@@ -10,24 +10,27 @@
 package api
 
 import (
+	"bactic/internal"
+	"bactic/internal/database"
 	"context"
-	"net/http"
+	"database/sql"
 	"errors"
-	"reflect"
+	"fmt"
+	"net/http"
 )
 
 // DefaultAPIService is a service that implements the logic for the DefaultAPIServicer
 // This service should implement the business logic for every endpoint for the DefaultAPI API.
 // Include any external packages or services that will be required by this service.
 type DefaultAPIService struct {
-	searchTrie *Trie
+	searchTrie *internal.Trie
 	db         *sql.DB
 }
 
 // NewDefaultAPIService creates a default api service
 func NewDefaultAPIService(dbURI string) DefaultAPIServicer {
 	db := database.NewBacticDB("postgres", dbURI)
-	trie := NewTrie()
+	trie := internal.NewTrie()
 	trie.CaseInsensitive()
 	trie.WithNorm()
 
@@ -37,16 +40,18 @@ func NewDefaultAPIService(dbURI string) DefaultAPIServicer {
 	}
 
 	var (
-		a        internal.Athlete
-		athletes []internal.Athlete
+		i     internal.SearchItem
+		id    uint32
+		items []internal.SearchItem
 	)
 
 	for rows.Next() {
-		rows.Scan(&a.Name, &a.ID)
-		athletes = append(athletes, a)
+		rows.Scan(&i.Name, &id)
+		i.Link = fmt.Sprintf("bactic.com/athletes/%d", id)
+		items = append(items, i)
 	}
 
-	trie.Insert(athletes...)
+	trie.Insert(items...)
 	return &DefaultAPIService{
 		searchTrie: trie,
 		db:         db,
@@ -54,50 +59,50 @@ func NewDefaultAPIService(dbURI string) DefaultAPIServicer {
 }
 
 // SearchAthleteGet -
-func (s *DefaultAPIService) SearchAthleteGet(ctx context.Context, name string) (ImplResponse, error) {
-	return Response(http.StatusOK, s.searchTrie.Search(name, 10)), nil
+func (s *DefaultAPIService) SearchAthleteGet(ctx context.Context, name string) (internal.ImplResponse, error) {
+	return internal.Response(http.StatusOK, s.searchTrie.Search(name, 10)), nil
 }
 
 // StatsAthleteIdGet -
-func (s *DefaultAPIService) StatsAthleteIdGet(ctx context.Context, id int64) (ImplResponse, error) {
+func (s *DefaultAPIService) StatsAthleteIdGet(ctx context.Context, id int64) (internal.ImplResponse, error) {
 	// TODO - update StatsAthleteIdGet with the required logic for this service method.
 	// Add api_default_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(200, AthleteSummary{}) or use other options such as http.Ok ...
 	// return Response(200, AthleteSummary{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("StatsAthleteIdGet method not implemented")
+	return internal.Response(http.StatusNotImplemented, nil), errors.New("StatsAthleteIdGet method not implemented")
 }
 
 // StatsHistGet -
-func (s *DefaultAPIService) StatsHistGet(ctx context.Context, events []Event, buckets float32) (ImplResponse, error) {
+func (s *DefaultAPIService) StatsHistGet(ctx context.Context, events []internal.EventType, buckets float32) (internal.ImplResponse, error) {
 	// TODO - update StatsHistGet with the required logic for this service method.
 	// Add api_default_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(200, []float32{}) or use other options such as http.Ok ...
 	// return Response(200, []float32{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("StatsHistGet method not implemented")
+	return internal.Response(http.StatusNotImplemented, nil), errors.New("StatsHistGet method not implemented")
 }
 
 // StatsTeamIdGet -
-func (s *DefaultAPIService) StatsTeamIdGet(ctx context.Context, id int64) (ImplResponse, error) {
+func (s *DefaultAPIService) StatsTeamIdGet(ctx context.Context, id int64) (internal.ImplResponse, error) {
 	// TODO - update StatsTeamIdGet with the required logic for this service method.
 	// Add api_default_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(200, TeamSummary{}) or use other options such as http.Ok ...
 	// return Response(200, TeamSummary{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("StatsTeamIdGet method not implemented")
+	return internal.Response(http.StatusNotImplemented, nil), errors.New("StatsTeamIdGet method not implemented")
 }
 
 // StatsTimeseriesGet -
-func (s *DefaultAPIService) StatsTimeseriesGet(ctx context.Context, start string, end string, event int64) (ImplResponse, error) {
+func (s *DefaultAPIService) StatsTimeseriesGet(ctx context.Context, start string, end string, event int64) (internal.ImplResponse, error) {
 	// TODO - update StatsTimeseriesGet with the required logic for this service method.
 	// Add api_default_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(200, StatsTimeseriesGet200Response{}) or use other options such as http.Ok ...
 	// return Response(200, StatsTimeseriesGet200Response{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("StatsTimeseriesGet method not implemented")
+	return internal.Response(http.StatusNotImplemented, nil), errors.New("StatsTimeseriesGet method not implemented")
 }

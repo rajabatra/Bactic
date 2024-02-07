@@ -10,35 +10,34 @@
 package api
 
 import (
-	"encoding/json"
+	"bactic/internal"
 	"net/http"
 	"strings"
-	"reflect"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // DefaultAPIController binds http requests to an api service and writes the service results to the http response
 type DefaultAPIController struct {
-	service DefaultAPIServicer
-	errorHandler ErrorHandler
+	service      DefaultAPIServicer
+	errorHandler internal.ErrorHandler
 }
 
 // DefaultAPIOption for how the controller is set up.
 type DefaultAPIOption func(*DefaultAPIController)
 
-// WithDefaultAPIErrorHandler inject ErrorHandler into controller
-func WithDefaultAPIErrorHandler(h ErrorHandler) DefaultAPIOption {
+// WithDefaultAPIinternal.ErrorHandler inject internal.ErrorHandler into controller
+func WithDefaultAPIErrorHandler(h internal.ErrorHandler) DefaultAPIOption {
 	return func(c *DefaultAPIController) {
 		c.errorHandler = h
 	}
 }
 
 // NewDefaultAPIController creates a default api controller
-func NewDefaultAPIController(s DefaultAPIServicer, opts ...DefaultAPIOption) Router {
+func NewDefaultAPIController(s DefaultAPIServicer, opts ...DefaultAPIOption) internal.Router {
 	controller := &DefaultAPIController{
 		service:      s,
-		errorHandler: DefaultErrorHandler,
+		errorHandler: internal.DefaultErrorHandler,
 	}
 
 	for _, opt := range opts {
@@ -49,37 +48,37 @@ func NewDefaultAPIController(s DefaultAPIServicer, opts ...DefaultAPIOption) Rou
 }
 
 // Routes returns all the api routes for the DefaultAPIController
-func (c *DefaultAPIController) Routes() Routes {
-	return Routes{
-		"SearchAthleteGet": Route{
-			strings.ToUpper("Get"),
-			"/api/search/athlete",
-			c.SearchAthleteGet,
+func (c *DefaultAPIController) Routes() internal.Routes {
+	return internal.Routes{
+		"SearchAthleteGet": internal.Route{
+			HandlerFunc: c.SearchAthleteGet,
+			Method:      strings.ToUpper("Get"),
+			Pattern:     "/api/search/athlete",
 		},
-		"StatsAthleteIdGet": Route{
-			strings.ToUpper("Get"),
-			"/api/stats/athlete/{id}",
-			c.StatsAthleteIdGet,
+		"StatsAthleteIdGet": internal.Route{
+			HandlerFunc: c.StatsAthleteIdGet,
+			Method:      strings.ToUpper("Get"),
+			Pattern:     "/api/stats/athlete/{id}",
 		},
-		"StatsHistGet": Route{
-			strings.ToUpper("Get"),
-			"/api/stats/hist",
-			c.StatsHistGet,
+		"StatsHistGet": internal.Route{
+			HandlerFunc: c.StatsHistGet,
+			Method:      strings.ToUpper("Get"),
+			Pattern:     "/api/stats/hist",
 		},
-		"StatsTeamIdGet": Route{
-			strings.ToUpper("Get"),
-			"/api/stats/team/{id}",
-			c.StatsTeamIdGet,
+		"StatsTeamIdGet": internal.Route{
+			HandlerFunc: c.StatsTeamIdGet,
+			Method:      strings.ToUpper("Get"),
+			Pattern:     "/api/stats/team/{id}",
 		},
-		"StatsTimeseriesGet": Route{
-			strings.ToUpper("Get"),
-			"/api/stats/timeseries",
-			c.StatsTimeseriesGet,
+		"StatsTimeseriesGet": internal.Route{
+			HandlerFunc: c.StatsTimeseriesGet,
+			Method:      strings.ToUpper("Get"),
+			Pattern:     "/api/stats/timeseries",
 		},
 	}
 }
 
-// SearchAthleteGet - 
+// SearchAthleteGet -
 func (c *DefaultAPIController) SearchAthleteGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var nameParam string
@@ -88,7 +87,7 @@ func (c *DefaultAPIController) SearchAthleteGet(w http.ResponseWriter, r *http.R
 
 		nameParam = param
 	} else {
-		c.errorHandler(w, r, &RequiredError{Field: "name"}, nil)
+		c.errorHandler(w, r, &internal.RequiredError{Field: "name"}, nil)
 		return
 	}
 	result, err := c.service.SearchAthleteGet(r.Context(), nameParam)
@@ -98,17 +97,17 @@ func (c *DefaultAPIController) SearchAthleteGet(w http.ResponseWriter, r *http.R
 		return
 	}
 	// If no error, encode the body and the result code
-	EncodeJSONResponse(result.Body, &result.Code, w)
+	internal.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsAthleteIdGet - 
+// StatsAthleteIdGet -
 func (c *DefaultAPIController) StatsAthleteIdGet(w http.ResponseWriter, r *http.Request) {
-	idParam, err := parseNumericParameter[int64](
+	idParam, err := internal.ParseNumericParameter[int64](
 		chi.URLParam(r, "id"),
-		WithRequire[int64](parseInt64),
+		internal.WithRequire[int64](internal.ParseInt64),
 	)
 	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &internal.ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.StatsAthleteIdGet(r.Context(), idParam)
@@ -118,20 +117,20 @@ func (c *DefaultAPIController) StatsAthleteIdGet(w http.ResponseWriter, r *http.
 		return
 	}
 	// If no error, encode the body and the result code
-	EncodeJSONResponse(result.Body, &result.Code, w)
+	internal.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsHistGet - 
+// StatsHistGet -
 func (c *DefaultAPIController) StatsHistGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	var eventsParam []Event
+	var eventsParam []internal.EventType
 	if query.Has("events") {
 		paramSplits := strings.Split(query.Get("events"), ",")
-		eventsParam = make([]Event, 0, len(paramSplits))
+		eventsParam = make([]internal.EventType, 0, len(paramSplits))
 		for _, param := range paramSplits {
-			paramEnum, err := NewEventFromValue(param)
+			paramEnum, err := internal.NewEventTypeFromValue(param)
 			if err != nil {
-				c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+				c.errorHandler(w, r, &internal.ParsingError{Err: err}, nil)
 				return
 			}
 			eventsParam = append(eventsParam, paramEnum)
@@ -139,12 +138,12 @@ func (c *DefaultAPIController) StatsHistGet(w http.ResponseWriter, r *http.Reque
 	}
 	var bucketsParam float32
 	if query.Has("buckets") {
-		param, err := parseNumericParameter[float32](
+		param, err := internal.ParseNumericParameter[float32](
 			query.Get("buckets"),
-			WithParse[float32](parseFloat32),
+			internal.WithParse[float32](internal.ParseFloat32),
 		)
 		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			c.errorHandler(w, r, &internal.ParsingError{Err: err}, nil)
 			return
 		}
 
@@ -160,17 +159,17 @@ func (c *DefaultAPIController) StatsHistGet(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// If no error, encode the body and the result code
-	EncodeJSONResponse(result.Body, &result.Code, w)
+	internal.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsTeamIdGet - 
+// StatsTeamIdGet -
 func (c *DefaultAPIController) StatsTeamIdGet(w http.ResponseWriter, r *http.Request) {
-	idParam, err := parseNumericParameter[int64](
+	idParam, err := internal.ParseNumericParameter[int64](
 		chi.URLParam(r, "id"),
-		WithRequire[int64](parseInt64),
+		internal.WithRequire[int64](internal.ParseInt64),
 	)
 	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &internal.ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.StatsTeamIdGet(r.Context(), idParam)
@@ -180,10 +179,10 @@ func (c *DefaultAPIController) StatsTeamIdGet(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// If no error, encode the body and the result code
-	EncodeJSONResponse(result.Body, &result.Code, w)
+	internal.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// StatsTimeseriesGet - 
+// StatsTimeseriesGet -
 func (c *DefaultAPIController) StatsTimeseriesGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var startParam string
@@ -192,7 +191,7 @@ func (c *DefaultAPIController) StatsTimeseriesGet(w http.ResponseWriter, r *http
 
 		startParam = param
 	} else {
-		c.errorHandler(w, r, &RequiredError{Field: "start"}, nil)
+		c.errorHandler(w, r, &internal.RequiredError{Field: "start"}, nil)
 		return
 	}
 	var endParam string
@@ -201,22 +200,21 @@ func (c *DefaultAPIController) StatsTimeseriesGet(w http.ResponseWriter, r *http
 
 		endParam = param
 	} else {
-		c.errorHandler(w, r, &RequiredError{Field: "end"}, nil)
+		c.errorHandler(w, r, &internal.RequiredError{Field: "end"}, nil)
 		return
 	}
 	var eventParam int64
 	if query.Has("event") {
-		param, err := parseNumericParameter[int64](
+		param, err := internal.ParseNumericParameter[int64](
 			query.Get("event"),
-			WithParse[int64](parseInt64),
+			internal.WithParse[int64](internal.ParseInt64),
 		)
 		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			c.errorHandler(w, r, &internal.ParsingError{Err: err}, nil)
 			return
 		}
 
 		eventParam = param
-	} else {
 	}
 	result, err := c.service.StatsTimeseriesGet(r.Context(), startParam, endParam, eventParam)
 	// If an error occurred, encode the error with the status code
@@ -225,5 +223,5 @@ func (c *DefaultAPIController) StatsTimeseriesGet(w http.ResponseWriter, r *http
 		return
 	}
 	// If no error, encode the body and the result code
-	EncodeJSONResponse(result.Body, &result.Code, w)
+	internal.EncodeJSONResponse(result.Body, &result.Code, w)
 }

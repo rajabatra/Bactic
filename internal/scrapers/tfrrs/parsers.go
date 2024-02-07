@@ -19,7 +19,7 @@ func parseMeetDate(date string) (time.Time, error) {
 	return time.Parse("January 2, 2006", date)
 }
 
-func parseDivision(region string) int {
+func parseDivision(region string) internal.Division {
 	match, err := regexp.MatchString("DIII", region)
 	if err != nil {
 		panic("Regexp error")
@@ -27,36 +27,36 @@ func parseDivision(region string) int {
 	if match {
 		return internal.DIII
 	}
+
+	match, err = regexp.MatchString("DII", region)
 	if err != nil {
 		panic("Regexp error")
 	}
-	match, err = regexp.MatchString("DII", region)
 	if match {
 		return internal.DII
 	}
+
+	match, err = regexp.MatchString("DI", region)
 	if err != nil {
 		panic("Regexp error")
 	}
-	match, err = regexp.MatchString("DI", region)
 	if match {
 		return internal.DI
 	}
+
+	match, err = regexp.MatchString("NAIA", region)
 	if err != nil {
 		panic("Regexp error")
 	}
-	match, err = regexp.MatchString("NAIA", region)
 	if match {
 		return internal.NAIA
 	}
-	if err != nil {
-		panic("Regexp error")
-	}
-	return -1
+
+	return ""
 }
 
 // For parsing integers, handles the case where we have a trailing dot from the regexp capture group
-func parseInt64(value string) int64 {
-
+func parseuint32(value string) uint32 {
 	// strip the leading dot or colon
 	if len(value) > 0 && (value[len(value)-1] == '.' || value[len(value)-1] == ':') {
 		value = value[:len(value)-1]
@@ -66,22 +66,22 @@ func parseInt64(value string) int64 {
 	if err != nil {
 		return 0
 	} else {
-		return int64(valInt)
+		return uint32(valInt)
 	}
 }
 
 func parseTime(t string) (float32, error) {
 	if slices.Contains([]string{"DNF", "DQ", "FS", "DNS", "NT"}, t) {
-		return 0.0, &internal.TimingError{Name: t}
+		return 0.0, &internal.TimingError{Code: t}
 	} else {
 		time_regexp := regexp.MustCompile(`(\d+:)?(\d+).(\d+)`)
 		matches := time_regexp.FindStringSubmatch(t)
 		if len(matches) != 4 {
 			return 0.0, errors.New("time could not be parsed into expected format string: t")
 		}
-		minutes := time.Duration(parseInt64(matches[1]))
-		seconds := time.Duration(parseInt64(matches[2]))
-		frac := time.Duration(parseInt64(matches[3])) * 10
+		minutes := time.Duration(parseuint32(matches[1]))
+		seconds := time.Duration(parseuint32(matches[2]))
+		frac := time.Duration(parseuint32(matches[3])) * 10
 
 		return float32((minutes*time.Minute + seconds*time.Second + frac*time.Millisecond).Seconds()), nil
 	}
@@ -96,15 +96,16 @@ var titleToEventEnum = map[string]internal.EventType{
 	"400 meters":        internal.T400M,
 	"800 meters":        internal.T800M,
 	"1500 meters":       internal.T1500M,
-	"mile":              internal.T1MILE,
+	"mile":              internal.T1MI,
 	"10,000 meters":     internal.T10000M,
-	"110 hurdles":       internal.T110H,
-	"400 hurdles":       internal.T400H,
-	"3000 steeplechase": internal.T3000S,
+	"100 hurdles":       internal.T100MH,
+	"110 hurdles":       internal.T110MH,
+	"400 hurdles":       internal.T400MH,
+	"3000 steeplechase": internal.T3000MS,
 	"3000 meters":       internal.T3000M,
-	"4 x 100m relay":    internal.T4X100,
-	"4 x 100 relay":     internal.T4X100,
-	"4 x 400 relay":     internal.T4X400,
+	"4 x 100m relay":    internal.T4X100M,
+	"4 x 100 relay":     internal.T4X100M,
+	"4 x 400 relay":     internal.T4X400M,
 	"high jump":         internal.HIGH_JUMP,
 	"pole vault":        internal.VAULT,
 	"long jump":         internal.LONG_JUMP,
@@ -116,20 +117,19 @@ var titleToEventEnum = map[string]internal.EventType{
 	"javelin":           internal.JAV,
 	"decathlon":         internal.DEC,
 	"heptathlon":        internal.HEPT,
-	"100 hurdles":       internal.T100H,
 }
 
 // Given an xc table header, return whether or not it is a summary
 func parseXCEventType(eventTitle string) (internal.EventType, error) {
 	eventTitle = strings.ToLower(eventTitle)
 	if strings.Contains(eventTitle, "8k") {
-		return internal.XC_8K, nil
+		return internal.XC8K, nil
 	} else if strings.Contains(eventTitle, "10k") {
-		return internal.XC_10K, nil
+		return internal.XC10K, nil
 	} else if strings.Contains(eventTitle, "6k") {
-		return internal.XC_6K, nil
+		return internal.XC6K, nil
 	} else {
-		return 0, errors.New("event table could not be parsed for type")
+		return "", errors.New("event table could not be parsed for type")
 	}
 }
 
@@ -144,7 +144,7 @@ func parseEvent(eventTitle string) (internal.EventType, error) {
 
 	event_type, exists := titleToEventEnum[eventParsed]
 	if !exists {
-		return 0, fmt.Errorf("the event title %s, which converts to key %s could not be mapped to an event", eventTitle, eventParsed)
+		return "", fmt.Errorf("the event title %s, which converts to key %s could not be mapped to an event", eventTitle, eventParsed)
 	}
 
 	return event_type, nil
@@ -190,10 +190,11 @@ func parseXCResult(row []htmlElement) (result internal.Result, athleteID uint32,
 	}
 
 	return internal.Result{
-		Place:    place,
+		Place:    int32(place),
 		Quantity: time,
 	}, athleteID, row[3].link, nil
 }
+
 func parseDistanceResult(row []htmlElement) (result internal.Result, athleteID uint32, schoolURL string, err error) {
 	if len(row) < 5 {
 		return internal.Result{}, 0, "", fmt.Errorf("distance result row %v is less than the correct length of 4", row)
@@ -215,7 +216,7 @@ func parseDistanceResult(row []htmlElement) (result internal.Result, athleteID u
 
 	return internal.Result{
 		Quantity: time,
-		Place:    place,
+		Place:    int32(place),
 	}, athleteID, row[3].link, nil
 }
 
@@ -241,7 +242,7 @@ func parseSprintsResult(row []htmlElement) (result internal.Result, athleteID ui
 
 	return internal.Result{
 		Quantity: time,
-		Place:    place,
+		Place:    int32(place),
 	}, athleteID, row[3].link, nil
 }
 
@@ -303,14 +304,15 @@ var parseIndividualResultClass = map[internal.EventType](func([]htmlElement) (re
 	internal.T400M:        parseSprintsResult,
 	internal.T800M:        parseDistanceResult,
 	internal.T1500M:       parseDistanceResult,
-	internal.T1MILE:       parseDistanceResult,
+	internal.T1MI:         parseDistanceResult,
 	internal.T10000M:      parseDistanceResult,
-	internal.T110H:        parseSprintsResult,
-	internal.T400H:        parseSprintsResult,
-	internal.T3000S:       parseDistanceResult,
+	internal.T100MH:       notImplementedResult,
+	internal.T110MH:       parseSprintsResult,
+	internal.T400MH:       parseSprintsResult,
+	internal.T3000MS:      parseDistanceResult,
 	internal.T3000M:       parseDistanceResult,
-	internal.T4X100:       parseRelayResult,
-	internal.T4X400:       parseRelayResult,
+	internal.T4X100M:      parseRelayResult,
+	internal.T4X400M:      parseRelayResult,
 	internal.HIGH_JUMP:    notImplementedResult,
 	internal.VAULT:        notImplementedResult,
 	internal.LONG_JUMP:    notImplementedResult,
@@ -322,8 +324,7 @@ var parseIndividualResultClass = map[internal.EventType](func([]htmlElement) (re
 	internal.JAV:          notImplementedResult,
 	internal.DEC:          notImplementedResult,
 	internal.HEPT:         notImplementedResult,
-	internal.T100H:        notImplementedResult,
-	internal.XC_10K:       parseXCResult,
-	internal.XC_8K:        parseXCResult,
-	internal.XC_6K:        parseXCResult,
+	internal.XC10K:        parseXCResult,
+	internal.XC8K:         parseXCResult,
+	internal.XC6K:         parseXCResult,
 }

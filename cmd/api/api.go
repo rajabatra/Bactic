@@ -10,6 +10,7 @@
 package main
 
 import (
+	"bactic/internal"
 	"bactic/internal/api"
 	"flag"
 	"log"
@@ -37,7 +38,7 @@ func main() {
 	DefaultAPIService := api.NewDefaultAPIService(dbURI)
 	DefaultAPIController := api.NewDefaultAPIController(DefaultAPIService)
 
-	router := api.NewRouter(DefaultAPIController)
+	router := internal.NewRouter(DefaultAPIController)
 
 	log.Printf("Server started")
 

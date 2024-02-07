@@ -75,7 +75,7 @@ func TestInsertSchools(t *testing.T) {
 		Leagues:  []string{"League"},
 		Name:     "School",
 		Division: internal.DIII,
-		URL:      "https://www.tfrrs.org/school_a",
+		Url:      "https://www.tfrrs.org/school_a",
 	}
 
 	tx, err := db.Begin()
@@ -121,7 +121,7 @@ func TestInsertAthlete(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	ath := internal.Athlete{
-		ID:   5,
+		Id:   5,
 		Name: "Freddy Fasgi",
 	}
 
@@ -144,11 +144,11 @@ func TestGetSchoolURL(t *testing.T) {
 	defer database.TeardownSchema(db)
 	url := "https://www.tfrrs.org/school_b"
 	school := internal.School{
-		ID:       uuid.New().ID(),
+		Id:       uuid.New().ID(),
 		Leagues:  []string{"League1", "League2"},
 		Name:     "School",
 		Division: internal.DIII,
-		URL:      url,
+		Url:      url,
 	}
 
 	tx, err := db.Begin()
@@ -166,7 +166,7 @@ func TestGetSchoolURL(t *testing.T) {
 		t.Errorf("Expected to find school with url %s but did not", url)
 	}
 
-	if school_ret.ID != school.ID {
+	if school_ret.Id != school.Id {
 		t.Errorf("Returned school did not have the same id as inserted")
 	}
 
@@ -179,11 +179,11 @@ func TestGetSchool(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	school := internal.School{
-		ID:       uuid.New().ID(),
+		Id:       uuid.New().ID(),
 		Leagues:  []string{"Conference", "League2"},
 		Name:     "School",
 		Division: internal.DIII,
-		URL:      "https://www.tfrrs.org/school_c",
+		Url:      "https://www.tfrrs.org/school_c",
 	}
 	tx, err := db.Begin()
 	if err != nil {
@@ -194,12 +194,12 @@ func TestGetSchool(t *testing.T) {
 		t.Error("Unexpected failure to school insert: ", err)
 	}
 
-	school_ret, found := database.GetSchool(tx, school.ID)
+	school_ret, found := database.GetSchool(tx, school.Id)
 	if !found {
-		t.Errorf("Expected to find school with id %d but did not", school.ID)
+		t.Errorf("Expected to find school with id %d but did not", school.Id)
 	}
 
-	if school_ret.ID != school.ID {
+	if school_ret.Id != school.Id {
 		t.Errorf("Returned school did not match fields with the inserted value")
 	}
 
@@ -207,12 +207,13 @@ func TestGetSchool(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestGetAthlete(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	ath1 := internal.Athlete{
 		Name: "Ath1",
-		ID:   123,
+		Id:   123,
 	}
 	tx, err := db.Begin()
 	if err != nil {
@@ -222,12 +223,12 @@ func TestGetAthlete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, found := database.GetAthlete(tx, ath1.ID)
+	res, found := database.GetAthlete(tx, ath1.Id)
 	if !found {
 		t.Fatal("Could not find athlete in database")
 	}
 
-	if res.ID != ath1.ID || res.Name != ath1.Name {
+	if res.Id != ath1.Id || res.Name != ath1.Name {
 		t.Fatal("Names or IDs did not match")
 	}
 
@@ -235,16 +236,17 @@ func TestGetAthlete(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestInsertHeat(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	ath1 := internal.Athlete{
 		Name: "Ath1",
-		ID:   123,
+		Id:   123,
 	}
 	ath2 := internal.Athlete{
 		Name: "Ath2",
-		ID:   456,
+		Id:   456,
 	}
 	tx, err := db.Begin()
 	if err != nil {
@@ -261,18 +263,19 @@ func TestInsertHeat(t *testing.T) {
 
 	heat := []internal.Result{
 		{
-			AthleteID: 123,
+			AthleteId: 123,
 			Quantity:  14*60 + 1.29, // Me
 			Place:     11,
 		},
-		{AthleteID: 456,
-			Quantity: 14*60 + 1.73, // Jack Rosencrans
-			Place:    12,
+		{
+			AthleteId: 456,
+			Quantity:  14*60 + 1.73, // Jack Rosencrans
+			Place:     12,
 		},
 	}
 
 	meet := internal.Meet{
-		ID:   1234,
+		Id:   1234,
 		Name: "Bactic Championships",
 		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 	}
@@ -282,7 +285,7 @@ func TestInsertHeat(t *testing.T) {
 		t.Error("Failed to insert preliminary meet", err)
 	}
 
-	_, err = database.InsertHeat(tx, internal.T5000M, meet.ID, heat)
+	_, err = database.InsertHeat(tx, internal.T5000M, meet.Id, heat)
 	if err != nil {
 		t.Error("Insert heat operation failed:", err)
 	}
@@ -291,17 +294,18 @@ func TestInsertHeat(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestAthleteSchoolRelation(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	ath1 := internal.Athlete{
 		Name: "Ath1",
-		ID:   123,
+		Id:   123,
 	}
 
 	ath2 := internal.Athlete{
 		Name: "Ath2",
-		ID:   456,
+		Id:   456,
 	}
 
 	tx, err := db.Begin()
@@ -318,11 +322,11 @@ func TestAthleteSchoolRelation(t *testing.T) {
 	}
 
 	school := internal.School{
-		ID:       uuid.New().ID(),
+		Id:       uuid.New().ID(),
 		Leagues:  []string{"League"},
 		Name:     "School",
 		Division: internal.DIII,
-		URL:      "https://www.tfrrs.org/school_a",
+		Url:      "https://www.tfrrs.org/school_a",
 	}
 
 	err = database.InsertSchool(tx, school)
@@ -330,7 +334,7 @@ func TestAthleteSchoolRelation(t *testing.T) {
 		t.Fatal("Unexpected failure to insert:", err)
 	}
 
-	err = database.AddAthleteToSchool(tx, ath1.ID, school.ID)
+	err = database.AddAthleteToSchool(tx, ath1.Id, school.Id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +348,7 @@ func TestInsertMeet(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	meet := internal.Meet{
-		ID:   1234,
+		Id:   1234,
 		Name: "Bactic Championships",
 		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 	}

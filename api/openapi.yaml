@@ -114,7 +114,7 @@ paths:
           required: false
           schema:
             items:
-              $ref: "#/components/schemas/Event"
+              $ref: "#/components/schemas/EventType"
             type: array
           style: form
         - description: number of histogram buckets
@@ -145,7 +145,7 @@ paths:
         required: false
         schema:
           items:
-            $ref: "#/components/schemas/Event"
+            $ref: "#/components/schemas/EventType"
           type: array
         style: form
       - description: number of histogram buckets
@@ -192,8 +192,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/_stats_timeseries_get_200_response"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        mean:
+                          type: number
+                          format: float
+                        variance:
+                          type: number
+                          format: float
+                  axis:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - data
+                  - axis
           description: a time series of event history
+
     parameters:
       - description: event
         explode: true
@@ -220,6 +240,7 @@ paths:
         schema:
           type: string
         style: form
+
 components:
   schemas:
     EventType:
@@ -290,12 +311,12 @@ components:
         id:
           type: integer
           format: int64
+        meet_id:
+          type: integer
+          format: int64
         type:
           type:
             $ref: "#/components/schemas/EventType"
-        meet_id:
-          type: number
-          format: int64
       required:
         - id
         - type
@@ -346,6 +367,7 @@ components:
       required:
         - id
         - name
+
     Athlete:
       example:
         name: name
@@ -356,6 +378,12 @@ components:
         id:
           format: int64
           type: integer
+        schools:
+          format: array
+          items: string
+      required:
+        - name
+        - id
     AthleteSummary:
       example:
         athlete:
@@ -368,59 +396,29 @@ components:
         zscore:
           format: float
           type: number
-    SearchItem:
-      example:
-        name: First Last
-        id: 1
+
+    Division:
       properties:
         name:
           type: string
         id:
-          format: int64
           type: integer
+          format: int64
       required:
-        - id
         - name
-    Event:
-      enum:
-        - 100m
-        - 200m
-        - 1500m
-        - 5000m
-      type: string
-    _stats_timeseries_get_200_response_data_inner:
-      example:
-        variance: 6.0274563
-        mean: 0.8008282
+        - id
+
+    SearchItem:
       properties:
-        mean:
-          format: float
-          type: number
-        variance:
-          format: float
-          type: number
+        name: string
+        item_type:
+          type: string
+          enum:
+            - athlete
+            - school
+            - division
+        link: string
       required:
-        - mean
-        - variance
-    _stats_timeseries_get_200_response:
-      example:
-        data:
-          - variance: 6.0274563
-            mean: 0.8008282
-          - variance: 6.0274563
-            mean: 0.8008282
-        axis:
-          - axis
-          - axis
-      properties:
-        data:
-          items:
-            $ref: "#/components/schemas/_stats_timeseries_get_200_response_data_inner"
-          type: array
-        axis:
-          items:
-            type: string
-          type: array
-      required:
-        - axis
-        - data
+        - item_type
+        - name
+        - link

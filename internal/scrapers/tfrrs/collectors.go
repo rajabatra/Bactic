@@ -63,7 +63,7 @@ func NewRSSCollector(db *sql.DB, ctx context.Context) *colly.Collector {
 			}
 
 			if err = database.InsertMeet(tx, internal.Meet{
-				ID:   meetID,
+				Id:   meetID,
 				Name: title,
 				Date: date,
 			}); err != nil {
@@ -71,7 +71,7 @@ func NewRSSCollector(db *sql.DB, ctx context.Context) *colly.Collector {
 			}
 
 			meetCtx := colly.NewContext()
-			meetCtx.Put("MeetID", meetID)
+			meetCtx.Put("MeetId", meetID)
 			meetCtx.Put("tx", tx)
 			if err := meetCollector.Request("GET", link, nil, meetCtx, nil); err != nil {
 				panic(err)
@@ -193,7 +193,7 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 			default:
 				// If we have the null reference athlete ID
 				if link == 0 {
-					resultTable[i].AthleteID = 0
+					resultTable[i].AthleteId = 0
 					validResults = append(validResults, resultTable[i])
 					continue
 				}
@@ -204,18 +204,18 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 				} else if httpError {
 					continue
 				}
-				resultTable[i].AthleteID = id
+				resultTable[i].AthleteId = id
 				validResults = append(validResults, resultTable[i])
 
 				school := checkSchool(tx, schoolURLs[i], logger)
-				if err := database.AddAthleteToSchool(tx, resultTable[i].AthleteID, school.ID); err != nil {
-					logger.Panic(err, school.ID)
+				if err := database.AddAthleteToSchool(tx, resultTable[i].AthleteId, school.Id); err != nil {
+					logger.Panic(err, school.Id)
 				}
 			}
 		}
 
 		// finally, insert the heat
-		meetID := h.Request.Ctx.GetAny("MeetID").(uint32)
+		meetID := h.Request.Ctx.GetAny("MeetId").(uint32)
 		_, err = database.InsertHeat(tx, eventType, meetID, validResults)
 		if err != nil {
 			panic(err)
@@ -282,7 +282,7 @@ func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint
 	logger.Printf("Found new athlete %s, scraping", athName)
 
 	if err := database.InsertAthlete(tx, internal.Athlete{
-		ID:   bacticID,
+		Id:   bacticID,
 		Name: athName,
 	}); err != nil {
 		panic(err)
@@ -310,28 +310,28 @@ func checkSchool(tx *sql.Tx, url string, logger *log.Logger) internal.School {
 	titleCaser := cases.Title(language.AmericanEnglish)
 	teamName := titleCaser.String(strings.TrimSpace(nameDiv.Text()))
 
-	division := -1
 	var leagues []string
+	var division internal.Division
 
 	nameDiv.Parent().Siblings().First().Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
 		d := parseDivision(s.Text())
-		if division >= 0 && d >= 0 && division != d {
+		if len(division) > 0 && len(d) > 0 && division != d {
 			log.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
-		} else if d >= 0 {
+		} else if len(d) > 0 {
 			division = d
 		} else {
 			leagues = append(leagues, strings.TrimSpace(s.Text()))
 		}
 	})
 
-	if division < 0 {
+	if division == "" {
 		logger.Println("Could not parse a division from the school page", teamName)
 	}
 
 	school = internal.School{
-		ID:       uuid.New().ID(),
+		Id:       uuid.New().ID(),
 		Name:     teamName,
-		URL:      url,
+		Url:      url,
 		Division: division,
 		Leagues:  leagues,
 	}

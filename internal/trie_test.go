@@ -1,7 +1,7 @@
-package api_test
+package internal_test
 
 import (
-	"bactic/internal/api"
+	"bactic/internal"
 	"fmt"
 	"os"
 	"runtime/pprof"
@@ -12,34 +12,38 @@ import (
 )
 
 func TestNewTrie(t *testing.T) {
-	tr := api.NewTrie()
+	tr := internal.NewTrie()
 	tr.CaseInsensitive()
 	tr.WithoutNorm()
 }
 
 func TestTrieInsert(t *testing.T) {
-	tr := api.NewTrie()
+	tr := internal.NewTrie()
 
 	nEntries := 100
-	entries := make([]string, nEntries)
+	entries := make([]internal.SearchItem, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, uuid.New().String())
+		entries = append(entries, internal.SearchItem{
+			Name: uuid.NewString(),
+		})
 	}
 
 	tr.Insert(entries...)
 }
 
 func TestTrieSearchMany(t *testing.T) {
-	tr := api.NewTrie()
+	tr := internal.NewTrie()
 	nEntries := 100
-	entries := make([]string, 0, nEntries)
+	entries := make([]internal.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, uuid.New().String())
+		entries = append(entries, internal.SearchItem{
+			Name: uuid.NewString(),
+		})
 	}
 
 	tr.Insert(entries...)
 
-	values := tr.Search(entries[0][:1], 100)
+	values := tr.Search(entries[0].Name[1:], 100)
 	fmt.Println(values)
 	valuesNames := make([]string, 0)
 
@@ -47,40 +51,43 @@ func TestTrieSearchMany(t *testing.T) {
 		valuesNames = append(valuesNames, v.Name)
 	}
 
-	if !slices.Contains(valuesNames, entries[0]) {
+	if !slices.Contains(valuesNames, entries[0].Name) {
 		t.Fatal("The returned values do not contain the searched string")
 	}
 }
 
 func TestTrieSearchSingle(t *testing.T) {
-	tr := api.NewTrie()
+	tr := internal.NewTrie()
 	nEntries := 100
-	entries := make([]string, 0, nEntries)
+	entries := make([]internal.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, uuid.New().String())
+		entries = append(entries, internal.SearchItem{
+			Name: uuid.NewString(),
+		})
 	}
 
 	tr.Insert(entries...)
 
-	values := tr.Search(entries[0][:5], 100)
-	fmt.Println(values)
+	values := tr.Search(entries[0].Name[:5], 100)
 	valuesNames := make([]string, 0)
 
 	for _, v := range values {
 		valuesNames = append(valuesNames, v.Name)
 	}
 
-	if !slices.Contains(valuesNames, entries[0]) {
+	if !slices.Contains(valuesNames, entries[0].Name) {
 		t.Fatal("The returned values do not contain the searched string")
 	}
 }
 
 func TestCreateMemoryProfile(t *testing.T) {
-	tr := api.NewTrie()
+	tr := internal.NewTrie()
 	nEntries := 1_000_000
-	entries := make([]string, 0, nEntries)
+	entries := make([]internal.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, uuid.New().String())
+		entries = append(entries, internal.SearchItem{
+			Name: uuid.NewString(),
+		})
 	}
 
 	mf, err := os.Create("./trie.mprof")
@@ -97,7 +104,7 @@ func TestCreateMemoryProfile(t *testing.T) {
 	pprof.StartCPUProfile(cf)
 	tr.Insert(entries...)
 
-	values := tr.Search(entries[0][:5], 10)
+	values := tr.Search(entries[0].Name[:5], 10)
 	pprof.StopCPUProfile()
 	pprof.WriteHeapProfile(mf)
 	valuesNames := make([]string, 0)
@@ -106,7 +113,7 @@ func TestCreateMemoryProfile(t *testing.T) {
 		valuesNames = append(valuesNames, v.Name)
 	}
 
-	if !slices.Contains(valuesNames, entries[0]) {
+	if !slices.Contains(valuesNames, entries[0].Name) {
 		t.Fatal("The returned values do not contain the searched string")
 	}
 }

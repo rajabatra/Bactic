@@ -45,9 +45,9 @@ func GetCrawls(tx *sql.Tx, results []internal.Result) []uint32 {
 	// we are given an athlete id and wish to know if that athlete exists
 	toCrawl := make([]uint32, 0, len(results))
 	for _, r := range results {
-		athlete, found := getAthlete(tx, r.ID)
+		athlete, found := getAthlete(tx, r.Id)
 		if !found {
-			toCrawl = append(toCrawl, athlete.ID)
+			toCrawl = append(toCrawl, athlete.Id)
 		}
 	}
 	return toCrawl
@@ -56,7 +56,7 @@ func GetCrawls(tx *sql.Tx, results []internal.Result) []uint32 {
 func getAthlete(tx *sql.Tx, athID uint32) (internal.Athlete, bool) {
 	row := tx.QueryRow("SELECT id, name FROM athlete WHERE id = $1", athID)
 	var athlete internal.Athlete
-	err := row.Scan(&athlete.ID, &athlete.Name)
+	err := row.Scan(&athlete.Id, &athlete.Name)
 	if err == sql.ErrNoRows {
 		return athlete, false
 	} else if err != nil {
@@ -95,8 +95,8 @@ func GetSchool(tx *sql.Tx, schoolID uint32) (internal.School, bool) {
 		panic(row.Err())
 	}
 
-	row.Scan(&school.ID, &school.Name, &school.Division)
-	leagues, err := tx.Query("SELECT league_name FROM league WHERE school_id = $1", school.ID)
+	row.Scan(&school.Id, &school.Name, &school.Division)
+	leagues, err := tx.Query("SELECT league_name FROM league WHERE school_id = $1", school.Id)
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
@@ -122,14 +122,14 @@ func GetSchoolURL(tx *sql.Tx, schoolURL string) (internal.School, bool) {
 	var school internal.School
 	row := tx.QueryRow("SELECT id, name, division FROM school WHERE url = $1", schoolURL)
 
-	err := row.Scan(&school.ID, &school.Name, &school.Division)
+	err := row.Scan(&school.Id, &school.Name, &school.Division)
 	if err == sql.ErrNoRows {
 		return school, false
 	} else if err != nil {
 		panic(err)
 	}
 
-	leagues, err := tx.Query("SELECT league_name FROM league WHERE school_id = $1", school.ID)
+	leagues, err := tx.Query("SELECT league_name FROM league WHERE school_id = $1", school.Id)
 	if err == sql.ErrNoRows {
 		return school, true
 	} else if err != nil {
@@ -152,12 +152,12 @@ func GetSchoolURL(tx *sql.Tx, schoolURL string) (internal.School, bool) {
 
 func InsertAthlete(tx *sql.Tx, ath internal.Athlete) error {
 	// We assume that the athlete's id has already been populated by the tfrrs id
-	_, err := tx.Exec("INSERT INTO athlete(id, name) VALUES($1, $2)", ath.ID, ath.Name)
+	_, err := tx.Exec("INSERT INTO athlete(id, name) VALUES($1, $2)", ath.Id, ath.Name)
 	if err != nil {
 		return err
 	}
 	for _, schoolID := range ath.Schools {
-		err = AddAthleteToSchool(tx, ath.ID, schoolID)
+		err = AddAthleteToSchool(tx, ath.Id, schoolID)
 		if err != nil {
 			return fmt.Errorf("could not create athlete school relation: %s", err)
 		}
@@ -176,7 +176,7 @@ func GetAthlete(tx *sql.Tx, athID uint32) (internal.Athlete, bool) {
 		panic(err)
 	}
 
-	ath.ID = athID
+	ath.Id = athID
 	// TODO: get other information about athelete (year, schools)
 	return ath, true
 }
@@ -192,13 +192,13 @@ func AddAthleteToSchool(tx *sql.Tx, athID uint32, schoolID uint32) error {
 }
 
 func InsertSchool(tx *sql.Tx, school internal.School) error {
-	_, err := tx.Exec("INSERT INTO school(id, name, division, url) VALUES($1, $2, $3, $4)", school.ID, school.Name, school.Division, school.URL)
+	_, err := tx.Exec("INSERT INTO school(id, name, division, url) VALUES($1, $2, $3, $4)", school.Id, school.Name, school.Division, school.Url)
 	if err != nil {
 		return err
 	}
 
 	for _, league := range school.Leagues {
-		_, err := tx.Exec("INSERT INTO league(school_id, league_name) VALUES($1, $2)", school.ID, league)
+		_, err := tx.Exec("INSERT INTO league(school_id, league_name) VALUES($1, $2)", school.Id, league)
 		if err != nil {
 			return err
 		}
@@ -207,16 +207,15 @@ func InsertSchool(tx *sql.Tx, school internal.School) error {
 }
 
 func insertResult(tx *sql.Tx, result internal.Result) error {
-	id := uuid.New().ID()
-	result.ID = id
+	result.Id = uuid.New().ID()
 	_, err := tx.Exec(`INSERT INTO result(id, heat_id, ath_id, pl, 
         quant, wind_ms, stage) VALUES($1, $2, $3, $4, $5, $6, $7)`,
-		result.ID,
-		result.HeatID,
-		result.AthleteID,
+		result.Id,
+		result.HeatId,
+		result.AthleteId,
 		result.Place,
 		result.Quantity,
-		result.WindMS,
+		result.WindMs,
 		result.Stage)
 	return err
 }
@@ -233,7 +232,7 @@ func InsertHeat(tx *sql.Tx, eventType internal.EventType, meetID uint32, results
 	// check to see that all schools are in the database
 
 	for _, result := range results {
-		result.HeatID = heatID
+		result.HeatId = heatID
 		if err := insertResult(tx, result); err != nil {
 			return 0, err
 		}
@@ -274,7 +273,7 @@ func AddAthleteRelation(tx *sql.Tx, x uint32, y uint32) error {
 }
 
 func InsertMeet(tx *sql.Tx, meet internal.Meet) error {
-	_, err := tx.Exec("INSERT INTO meet(id, name, date, season) VALUES($1, $2, $3, $4)", meet.ID, meet.Name, meet.Date, meet.Season)
+	_, err := tx.Exec("INSERT INTO meet(id, name, date, season) VALUES($1, $2, $3, $4)", meet.Id, meet.Name, meet.Date, meet.Season)
 	return err
 }
 

@@ -41,9 +41,9 @@ func TestScraperTFMeet(t *testing.T) {
 	meetID := uint32(79700)
 	collector := tfrrs.NewMeetCollector(context.Background())
 	database.InsertMeet(tx, internal.Meet{
-		ID:     meetID,
+		Id:     meetID,
 		Name:   "2023 SCIAC TF Championships",
-		Season: internal.OUTDOOR,
+		Season: "outdoor",
 		Date:   time.Date(2023, time.April, 29, 0, 0, 0, 0, time.UTC),
 	})
 	ctx := colly.NewContext()
@@ -65,9 +65,9 @@ func TestScraperXCMeet(t *testing.T) {
 	meetID := uint32(23293)
 	collector := tfrrs.NewMeetCollector(context.Background())
 	database.InsertMeet(tx, internal.Meet{
-		ID:     meetID,
+		Id:     meetID,
 		Name:   "2023 SCIAC Cross Country Championships",
-		Season: internal.XC,
+		Season: "xc",
 		Date:   time.Date(2023, time.October, 28, 0, 0, 0, 0, time.UTC),
 	})
 	ctx := colly.NewContext()
