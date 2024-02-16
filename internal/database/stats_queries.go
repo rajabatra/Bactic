@@ -1,12 +1,12 @@
 package database
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"database/sql"
 )
 
 // Return a bucketing of data from table into nBuckets
-func Histogram(db *sql.DB, eventType internal.EventType, nBuckets int) []int {
+func Histogram(db *sql.DB, eventType data.EventType, nBuckets int) []int {
 	if nBuckets <= 0 {
 		panic("nBuckets must be greater than zero")
 	}
@@ -42,10 +42,10 @@ func Histogram(db *sql.DB, eventType internal.EventType, nBuckets int) []int {
 	return hist
 }
 
-func PersonalRecord(db *sql.DB, eventType internal.EventType, athID uint32) float32 {
+func PersonalRecord(db *sql.DB, eventType data.EventType, athID uint32) float32 {
 	panic("Not implemented!")
 }
 
-func PersonalHistory(db *sql.DB, eventType internal.EventType, athID uint32) []float32 {
+func PersonalHistory(db *sql.DB, eventType data.EventType, athID uint32) []float32 {
 	panic("Not implemented!")
 }

@@ -1,7 +1,7 @@
 package database_test
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"bactic/internal/database"
 	"database/sql"
 	"testing"
@@ -71,10 +71,10 @@ func TestGetAthleteID(t *testing.T) {
 func TestInsertSchools(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	school := internal.School{
+	school := data.School{
 		Leagues:  []string{"League"},
 		Name:     "School",
-		Division: internal.DIII,
+		Division: data.DIII,
 		Url:      "https://www.tfrrs.org/school_a",
 	}
 
@@ -120,7 +120,7 @@ func TestGetMissingSchools(t *testing.T) {
 func TestInsertAthlete(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	ath := internal.Athlete{
+	ath := data.Athlete{
 		Id:   5,
 		Name: "Freddy Fasgi",
 	}
@@ -143,11 +143,11 @@ func TestGetSchoolURL(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
 	url := "https://www.tfrrs.org/school_b"
-	school := internal.School{
+	school := data.School{
 		Id:       uuid.New().ID(),
 		Leagues:  []string{"League1", "League2"},
 		Name:     "School",
-		Division: internal.DIII,
+		Division: data.DIII,
 		Url:      url,
 	}
 
@@ -178,11 +178,11 @@ func TestGetSchoolURL(t *testing.T) {
 func TestGetSchool(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	school := internal.School{
+	school := data.School{
 		Id:       uuid.New().ID(),
 		Leagues:  []string{"Conference", "League2"},
 		Name:     "School",
-		Division: internal.DIII,
+		Division: data.DIII,
 		Url:      "https://www.tfrrs.org/school_c",
 	}
 	tx, err := db.Begin()
@@ -211,7 +211,7 @@ func TestGetSchool(t *testing.T) {
 func TestGetAthlete(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	ath1 := internal.Athlete{
+	ath1 := data.Athlete{
 		Name: "Ath1",
 		Id:   123,
 	}
@@ -240,11 +240,11 @@ func TestGetAthlete(t *testing.T) {
 func TestInsertHeat(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	ath1 := internal.Athlete{
+	ath1 := data.Athlete{
 		Name: "Ath1",
 		Id:   123,
 	}
-	ath2 := internal.Athlete{
+	ath2 := data.Athlete{
 		Name: "Ath2",
 		Id:   456,
 	}
@@ -261,7 +261,7 @@ func TestInsertHeat(t *testing.T) {
 		t.Error("Failed to insert ath2", err)
 	}
 
-	heat := []internal.Result{
+	heat := []data.Result{
 		{
 			AthleteId: 123,
 			Quantity:  14*60 + 1.29, // Me
@@ -274,10 +274,11 @@ func TestInsertHeat(t *testing.T) {
 		},
 	}
 
-	meet := internal.Meet{
-		Id:   1234,
-		Name: "Bactic Championships",
-		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
+	meet := data.Meet{
+		Id:     1234,
+		Name:   "Bactic Championships",
+		Season: data.OUTDOOR,
+		Date:   time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 	}
 
 	err = database.InsertMeet(tx, meet)
@@ -285,7 +286,7 @@ func TestInsertHeat(t *testing.T) {
 		t.Error("Failed to insert preliminary meet", err)
 	}
 
-	_, err = database.InsertHeat(tx, internal.T5000M, meet.Id, heat)
+	_, err = database.InsertHeat(tx, data.T5000M, meet.Id, heat)
 	if err != nil {
 		t.Error("Insert heat operation failed:", err)
 	}
@@ -298,12 +299,12 @@ func TestInsertHeat(t *testing.T) {
 func TestAthleteSchoolRelation(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	ath1 := internal.Athlete{
+	ath1 := data.Athlete{
 		Name: "Ath1",
 		Id:   123,
 	}
 
-	ath2 := internal.Athlete{
+	ath2 := data.Athlete{
 		Name: "Ath2",
 		Id:   456,
 	}
@@ -321,11 +322,11 @@ func TestAthleteSchoolRelation(t *testing.T) {
 		t.Fatal("Failed to insert ath2", err)
 	}
 
-	school := internal.School{
+	school := data.School{
 		Id:       uuid.New().ID(),
 		Leagues:  []string{"League"},
 		Name:     "School",
-		Division: internal.DIII,
+		Division: data.DIII,
 		Url:      "https://www.tfrrs.org/school_a",
 	}
 
@@ -347,10 +348,11 @@ func TestAthleteSchoolRelation(t *testing.T) {
 func TestInsertMeet(t *testing.T) {
 	db := setupTestDB()
 	defer database.TeardownSchema(db)
-	meet := internal.Meet{
-		Id:   1234,
-		Name: "Bactic Championships",
-		Date: time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
+	meet := data.Meet{
+		Id:     1234,
+		Name:   "Bactic Championships",
+		Season: data.OUTDOOR,
+		Date:   time.Date(2023, time.May, 6, 0, 0, 0, 0, time.UTC),
 	}
 
 	tx, err := db.Begin()

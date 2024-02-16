@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   db:
-    container_name: bactic_db
+    container_name: db
     image: postgres:15-alpine
     ports:
       - "5432:5432"
@@ -18,7 +18,7 @@ services:
       - "db_params.env"
 
   api:
-    container_name: bactic_api
+    container_name: api
     build:
       context: ../
       dockerfile: build/api/Dockerfile
@@ -35,9 +35,15 @@ services:
       - db
     env_file:
       - "global.env"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../internal/api/
+        - action: rebuild
+          path: ../cmd/api/
 
   scraper:
-    container_name: bactic_scraper
+    container_name: scraper
     build:
       context: ../
       dockerfile: build/scraper/Dockerfile
@@ -49,9 +55,15 @@ services:
       - db
     env_file:
       - "global.env"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../internal/scrapers
+        - action: rebuild
+          path: ../cmd/scraper
 
   cache:
-    container_name: bactic_cache
+    container_name: cache
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -64,10 +76,12 @@ services:
       retries: 5
 
   web:
-    container_name: bactic_web
+    container_name: web
     build:
-      context: ../
-      dockerfile: build/web/Dockerfile
+      context: ../web
+      dockerfile: ../build/web/Dockerfile
+      target: dev
+    command: ["node", "node_modules/.bin/vite", "dev"]
     restart: always
     depends_on:
       - api
@@ -76,7 +90,12 @@ services:
     env_file:
       - "global.env"
     ports:
-      - "8080:3000"
+      - "8080:5173"
+    develop:
+      watch:
+        - action: sync
+          path: ../web/
+          target: /usr/src/app
 
 volumes:
   db:

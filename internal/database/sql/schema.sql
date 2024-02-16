@@ -1,10 +1,11 @@
 CREATE TABLE IF NOT EXISTS athlete(
     id BIGINT PRIMARY KEY,
-    name VARCHAR,
-    year INT
+    name VARCHAR NOT NULL,
+    year INT,
+    zscore FLOAT NOT NULL
 );
 
-INSERT INTO athlete(id, name) VALUES(0, 'NULL') ON CONFLICT DO NOTHING; -- Null for results without an athlete profile
+INSERT INTO athlete(id, name, zscore) VALUES(0, 'NULL', 0) ON CONFLICT DO NOTHING; -- Null for results without an athlete profile
 
 CREATE TABLE IF NOT EXISTS meet(
     id BIGINT PRIMARY KEY,
@@ -56,4 +57,10 @@ CREATE TABLE IF NOT EXISTS athlete_in_school(
 CREATE TABLE IF NOT EXISTS athlete_map(
     x BIGINT PRIMARY KEY,
     y BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS distns(
+    event SMALLINT PRIMARY KEY,
+    mean FLOAT NOT NULL,
+    var FLOAT NOT NULL
 );

@@ -1,6 +1,7 @@
-package internal
+package api
 
 import (
+	"bactic/internal/data"
 	"strings"
 	"unicode"
 
@@ -11,7 +12,7 @@ import (
 
 type node struct {
 	children map[rune]*node
-	values   []SearchItem
+	values   []data.SearchItem
 }
 
 type Trie struct {
@@ -24,7 +25,7 @@ func NewTrie() *Trie {
 	return &Trie{
 		root: &node{
 			children: make(map[rune]*node),
-			values:   make([]SearchItem, 0),
+			values:   make([]data.SearchItem, 0),
 		},
 		normalization: false,
 		casesensitive: true,
@@ -47,7 +48,7 @@ func (t *Trie) CaseInsensitive() {
 	t.casesensitive = false
 }
 
-func (t *Trie) Insert(entries ...SearchItem) {
+func (t *Trie) Insert(entries ...data.SearchItem) {
 	transformer := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	for _, entry := range entries {
 		name := entry.Name
@@ -83,8 +84,8 @@ func (t *Trie) Insert(entries ...SearchItem) {
 	}
 }
 
-func (t *Trie) Search(query string, count int) []SearchItem {
-	results := make([]SearchItem, 0, count)
+func (t *Trie) Search(query string, count int) []data.SearchItem {
+	results := make([]data.SearchItem, 0, count)
 	transformer := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	if t.normalization {
 		var err error

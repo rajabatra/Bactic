@@ -1,7 +1,7 @@
 package database_test
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"bactic/internal/database"
 	"testing"
 )
@@ -34,7 +34,7 @@ func TestHistogram(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hist := database.Histogram(db, internal.T5000M, 3)
+	hist := database.Histogram(db, data.T5000M, 3)
 	expected := []int{1, 1, 1}
 	for i, h := range hist {
 		if expected[i] != h {

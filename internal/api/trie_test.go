@@ -1,7 +1,8 @@
-package internal_test
+package api_test
 
 import (
-	"bactic/internal"
+	"bactic/internal/api"
+	"bactic/internal/data"
 	"fmt"
 	"os"
 	"runtime/pprof"
@@ -12,18 +13,18 @@ import (
 )
 
 func TestNewTrie(t *testing.T) {
-	tr := internal.NewTrie()
+	tr := api.NewTrie()
 	tr.CaseInsensitive()
 	tr.WithoutNorm()
 }
 
 func TestTrieInsert(t *testing.T) {
-	tr := internal.NewTrie()
+	tr := api.NewTrie()
 
 	nEntries := 100
-	entries := make([]internal.SearchItem, nEntries)
+	entries := make([]data.SearchItem, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, internal.SearchItem{
+		entries = append(entries, data.SearchItem{
 			Name: uuid.NewString(),
 		})
 	}
@@ -32,11 +33,11 @@ func TestTrieInsert(t *testing.T) {
 }
 
 func TestTrieSearchMany(t *testing.T) {
-	tr := internal.NewTrie()
+	tr := api.NewTrie()
 	nEntries := 100
-	entries := make([]internal.SearchItem, 0, nEntries)
+	entries := make([]data.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, internal.SearchItem{
+		entries = append(entries, data.SearchItem{
 			Name: uuid.NewString(),
 		})
 	}
@@ -57,11 +58,11 @@ func TestTrieSearchMany(t *testing.T) {
 }
 
 func TestTrieSearchSingle(t *testing.T) {
-	tr := internal.NewTrie()
+	tr := api.NewTrie()
 	nEntries := 100
-	entries := make([]internal.SearchItem, 0, nEntries)
+	entries := make([]data.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, internal.SearchItem{
+		entries = append(entries, data.SearchItem{
 			Name: uuid.NewString(),
 		})
 	}
@@ -81,11 +82,11 @@ func TestTrieSearchSingle(t *testing.T) {
 }
 
 func TestCreateMemoryProfile(t *testing.T) {
-	tr := internal.NewTrie()
+	tr := api.NewTrie()
 	nEntries := 1_000_000
-	entries := make([]internal.SearchItem, 0, nEntries)
+	entries := make([]data.SearchItem, 0, nEntries)
 	for i := 0; i < nEntries; i++ {
-		entries = append(entries, internal.SearchItem{
+		entries = append(entries, data.SearchItem{
 			Name: uuid.NewString(),
 		})
 	}

@@ -1,7 +1,7 @@
 package tfrrs
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"bactic/internal/database"
 	"context"
 	"database/sql"
@@ -62,7 +62,7 @@ func NewRSSCollector(db *sql.DB, ctx context.Context) *colly.Collector {
 				panic(err)
 			}
 
-			if err = database.InsertMeet(tx, internal.Meet{
+			if err = database.InsertMeet(tx, data.Meet{
 				Id:   meetID,
 				Name: title,
 				Date: date,
@@ -120,7 +120,7 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 
 		url := h.Request.URL.String()
 		var (
-			eventType internal.EventType
+			eventType data.EventType
 			err       error
 		)
 
@@ -183,7 +183,7 @@ func NewMeetCollector(ctx context.Context) *colly.Collector {
 		*/
 		// parse all information from table
 		resultTable, linkIDs, schoolURLs := parseResultTable(table, logger, eventType)
-		validResults := make([]internal.Result, 0)
+		validResults := make([]data.Result, 0)
 
 		for i, link := range linkIDs {
 			select {
@@ -281,7 +281,7 @@ func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint
 	athName := c.String(strings.Join(athFields, " "))
 	logger.Printf("Found new athlete %s, scraping", athName)
 
-	if err := database.InsertAthlete(tx, internal.Athlete{
+	if err := database.InsertAthlete(tx, data.Athlete{
 		Id:   bacticID,
 		Name: athName,
 	}); err != nil {
@@ -291,7 +291,7 @@ func checkAthlete(tx *sql.Tx, linkID uint32, logger *log.Logger) (athleteID uint
 }
 
 // checks the url string for existence. If not, scrape the school and then insert. Otherwise, insert the school
-func checkSchool(tx *sql.Tx, url string, logger *log.Logger) internal.School {
+func checkSchool(tx *sql.Tx, url string, logger *log.Logger) data.School {
 	school, found := database.GetSchoolURL(tx, url)
 	if found {
 		return school
@@ -311,24 +311,25 @@ func checkSchool(tx *sql.Tx, url string, logger *log.Logger) internal.School {
 	teamName := titleCaser.String(strings.TrimSpace(nameDiv.Text()))
 
 	var leagues []string
-	var division internal.Division
+	var division data.Division = 4
 
 	nameDiv.Parent().Siblings().First().Find("span.panel-heading-normal-text").First().Children().Each(func(i int, s *goquery.Selection) {
-		d := parseDivision(s.Text())
-		if len(division) > 0 && len(d) > 0 && division != d {
-			log.Fatalf("Found conflicting divisions in the parsed division list: %d, %d", division, d)
-		} else if len(d) > 0 {
-			division = d
-		} else {
+		d, err := data.NewDivisionFromValue(extractDivision(s.Text()))
+		if err != nil {
 			leagues = append(leagues, strings.TrimSpace(s.Text()))
+		}
+
+		// NAIA schools are sometimes also labeled in NCAA
+		if division != data.NAIA {
+			division = d
 		}
 	})
 
-	if division == "" {
+	if !division.AssertValid() {
 		logger.Println("Could not parse a division from the school page", teamName)
 	}
 
-	school = internal.School{
+	school = data.School{
 		Id:       uuid.New().ID(),
 		Name:     teamName,
 		Url:      url,

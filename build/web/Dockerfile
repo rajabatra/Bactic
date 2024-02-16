@@ -1,10 +1,14 @@
 # generate the api docs page
 
+FROM node:21-alpine as dev
+WORKDIR /usr/src/app
+COPY ./package.json ./package-lock.json ./
+RUN npm install
+COPY . .
+
 FROM node:21-alpine as build
 WORKDIR /usr/src/app
-COPY ./web/package.json .
-RUN npm install
-COPY ./web .
+COPY --from=dev /usr/src/app/ ./
 RUN npm run build
 
 FROM node:21-alpine as runtime

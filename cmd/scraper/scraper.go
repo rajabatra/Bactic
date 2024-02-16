@@ -62,6 +62,7 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	signal.Notify(interrupt, syscall.SIGINT)
+	signal.Notify(interrupt, syscall.SIGTERM)
 	var wg sync.WaitGroup
 
 	for _, startScraper := range scraperSet {

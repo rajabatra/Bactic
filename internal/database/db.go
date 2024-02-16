@@ -1,8 +1,9 @@
 package database
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 
@@ -23,6 +24,7 @@ func NewBacticDB(driverName string, connStr string) *sql.DB {
 	if err != nil {
 		log.Panicf("could not connect to database with url %s due to error: %v", connStr, err)
 	}
+	SetupSchema(conn)
 	return conn
 }
 
@@ -41,7 +43,7 @@ func TeardownSchema(db *sql.DB) {
 }
 
 // Search the struct for additional data that needs to be crawled before inserting some results
-func GetCrawls(tx *sql.Tx, results []internal.Result) []uint32 {
+func GetCrawls(tx *sql.Tx, results []data.Result) []uint32 {
 	// we are given an athlete id and wish to know if that athlete exists
 	toCrawl := make([]uint32, 0, len(results))
 	for _, r := range results {
@@ -53,9 +55,9 @@ func GetCrawls(tx *sql.Tx, results []internal.Result) []uint32 {
 	return toCrawl
 }
 
-func getAthlete(tx *sql.Tx, athID uint32) (internal.Athlete, bool) {
+func getAthlete(tx *sql.Tx, athID uint32) (data.Athlete, bool) {
 	row := tx.QueryRow("SELECT id, name FROM athlete WHERE id = $1", athID)
-	var athlete internal.Athlete
+	var athlete data.Athlete
 	err := row.Scan(&athlete.Id, &athlete.Name)
 	if err == sql.ErrNoRows {
 		return athlete, false
@@ -86,9 +88,9 @@ func getAthlete(tx *sql.Tx, athID uint32) (internal.Athlete, bool) {
 	return athlete, true
 }
 
-func GetSchool(tx *sql.Tx, schoolID uint32) (internal.School, bool) {
+func GetSchool(tx *sql.Tx, schoolID uint32) (data.School, bool) {
 	row := tx.QueryRow("SELECT id, name, division FROM school WHERE id = $1", schoolID)
-	var school internal.School
+	var school data.School
 	if row.Err() == sql.ErrNoRows {
 		return school, false
 	} else if row.Err() != nil {
@@ -118,8 +120,8 @@ func GetSchool(tx *sql.Tx, schoolID uint32) (internal.School, bool) {
 	return school, true
 }
 
-func GetSchoolURL(tx *sql.Tx, schoolURL string) (internal.School, bool) {
-	var school internal.School
+func GetSchoolURL(tx *sql.Tx, schoolURL string) (data.School, bool) {
+	var school data.School
 	row := tx.QueryRow("SELECT id, name, division FROM school WHERE url = $1", schoolURL)
 
 	err := row.Scan(&school.Id, &school.Name, &school.Division)
@@ -150,7 +152,7 @@ func GetSchoolURL(tx *sql.Tx, schoolURL string) (internal.School, bool) {
 	return school, true
 }
 
-func InsertAthlete(tx *sql.Tx, ath internal.Athlete) error {
+func InsertAthlete(tx *sql.Tx, ath data.Athlete) error {
 	// We assume that the athlete's id has already been populated by the tfrrs id
 	_, err := tx.Exec("INSERT INTO athlete(id, name) VALUES($1, $2)", ath.Id, ath.Name)
 	if err != nil {
@@ -166,9 +168,9 @@ func InsertAthlete(tx *sql.Tx, ath internal.Athlete) error {
 }
 
 // Get athlete struct from database according to bactic athlete id
-func GetAthlete(tx *sql.Tx, athID uint32) (internal.Athlete, bool) {
+func GetAthlete(tx *sql.Tx, athID uint32) (data.Athlete, bool) {
 	row := tx.QueryRow("SELECT name FROM athlete WHERE id = $1", athID)
-	var ath internal.Athlete
+	var ath data.Athlete
 	err := row.Scan(&ath.Name)
 	if err == sql.ErrNoRows {
 		return ath, false
@@ -191,7 +193,7 @@ func AddAthleteToSchool(tx *sql.Tx, athID uint32, schoolID uint32) error {
 	return err
 }
 
-func InsertSchool(tx *sql.Tx, school internal.School) error {
+func InsertSchool(tx *sql.Tx, school data.School) error {
 	_, err := tx.Exec("INSERT INTO school(id, name, division, url) VALUES($1, $2, $3, $4)", school.Id, school.Name, school.Division, school.Url)
 	if err != nil {
 		return err
@@ -206,9 +208,9 @@ func InsertSchool(tx *sql.Tx, school internal.School) error {
 	return nil
 }
 
-func insertResult(tx *sql.Tx, result internal.Result) error {
+func insertResult(tx *sql.Tx, result data.Result) error {
 	result.Id = uuid.New().ID()
-	_, err := tx.Exec(`INSERT INTO result(id, heat_id, ath_id, pl, 
+	_, err := tx.Exec(`INSERT INTO result(id, heat_id, ath_id, pl,
         quant, wind_ms, stage) VALUES($1, $2, $3, $4, $5, $6, $7)`,
 		result.Id,
 		result.HeatId,
@@ -221,7 +223,7 @@ func insertResult(tx *sql.Tx, result internal.Result) error {
 }
 
 // We should process inserts heat-by-heat, since that is how the data is scraped
-func InsertHeat(tx *sql.Tx, eventType internal.EventType, meetID uint32, results []internal.Result) (uint32, error) {
+func InsertHeat(tx *sql.Tx, eventType data.EventType, meetID uint32, results []data.Result) (uint32, error) {
 	// check to see if athlete exists
 	heatID := uuid.New().ID()
 	_, err := tx.Exec("INSERT INTO heat(id, meet_id, event_type) VALUES($1, $2, $3)", heatID, meetID, eventType)
@@ -272,7 +274,7 @@ func AddAthleteRelation(tx *sql.Tx, x uint32, y uint32) error {
 	return err
 }
 
-func InsertMeet(tx *sql.Tx, meet internal.Meet) error {
+func InsertMeet(tx *sql.Tx, meet data.Meet) error {
 	_, err := tx.Exec("INSERT INTO meet(id, name, date, season) VALUES($1, $2, $3, $4)", meet.Id, meet.Name, meet.Date, meet.Season)
 	return err
 }
@@ -287,4 +289,29 @@ func GetMissingSchools(tx *sql.Tx, schoolURLs []string) []string {
 		}
 	}
 	return missingSchools
+}
+
+func getEventHistory(tx *sql.Tx, id uint32) map[data.EventType]data.Result {
+	rows, err := tx.Query(`SELECT pl, quant, wind_ms
+		FROM result
+		WHERE result.ath_id = $1`, id)
+	if err != nil {
+		log.Fatalf("error querying event history: %s", err)
+	}
+
+	for rows.Next() {
+		rows.
+	}
+
+}
+
+func GetAthleteSummary(tx *sql.Tx, id uint32) (summary data.AthleteSummary, found bool) {
+	s := data.AthleteSummary{}
+	a, found := GetAthlete(tx, id)
+	if !found {
+		return s, false
+	}
+	s.Athlete = a
+	s.Results = getEventHistory(tx, id)
+	return s, true
 }

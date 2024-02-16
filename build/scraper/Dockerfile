@@ -1,4 +1,4 @@
-FROM golang:1.21 AS build
+FROM golang:1.22 AS build
 WORKDIR /go/src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
@@ -11,4 +11,3 @@ WORKDIR /usr/bin
 COPY --from=build /go/src/scraper ./
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 CMD ["scraper"]
-

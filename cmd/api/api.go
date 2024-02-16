@@ -10,7 +10,6 @@
 package main
 
 import (
-	"bactic/internal"
 	"bactic/internal/api"
 	"flag"
 	"log"
@@ -35,12 +34,9 @@ func main() {
 		}
 	}
 
-	DefaultAPIService := api.NewDefaultAPIService(dbURI)
-	DefaultAPIController := api.NewDefaultAPIController(DefaultAPIService)
-
-	router := internal.NewRouter(DefaultAPIController)
-
+	APIServicer := api.NewAPIServicer(dbURI)
+	APIRouter := api.NewAPIRouter(APIServicer)
+	api.RegisterRoutes(APIRouter)
 	log.Printf("Server started")
-
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }

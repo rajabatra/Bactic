@@ -2,7 +2,7 @@
 package tfrrs_test
 
 import (
-	"bactic/internal"
+	"bactic/internal/data"
 	"bactic/internal/database"
 	"bactic/internal/scrapers/tfrrs"
 	"context"
@@ -40,10 +40,10 @@ func TestScraperTFMeet(t *testing.T) {
 
 	meetID := uint32(79700)
 	collector := tfrrs.NewMeetCollector(context.Background())
-	database.InsertMeet(tx, internal.Meet{
+	database.InsertMeet(tx, data.Meet{
 		Id:     meetID,
 		Name:   "2023 SCIAC TF Championships",
-		Season: "outdoor",
+		Season: data.OUTDOOR,
 		Date:   time.Date(2023, time.April, 29, 0, 0, 0, 0, time.UTC),
 	})
 	ctx := colly.NewContext()
@@ -64,10 +64,10 @@ func TestScraperXCMeet(t *testing.T) {
 
 	meetID := uint32(23293)
 	collector := tfrrs.NewMeetCollector(context.Background())
-	database.InsertMeet(tx, internal.Meet{
+	database.InsertMeet(tx, data.Meet{
 		Id:     meetID,
 		Name:   "2023 SCIAC Cross Country Championships",
-		Season: "xc",
+		Season: data.OUTDOOR,
 		Date:   time.Date(2023, time.October, 28, 0, 0, 0, 0, time.UTC),
 	})
 	ctx := colly.NewContext()

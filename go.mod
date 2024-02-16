@@ -1,11 +1,10 @@
 module bactic
 
-go 1.21.1
+go 1.22
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/antchfx/xmlquery v1.3.18
-	github.com/aws/aws-cdk-go/awscdk v1.204.0-devpreview
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.114.1
 	github.com/aws/constructs-go/constructs/v10 v10.3.0
 	github.com/aws/jsii-runtime-go v1.92.0
@@ -14,8 +13,6 @@ require (
 	github.com/lib/pq v1.10.9
 	golang.org/x/text v0.14.0
 )
-
-require github.com/aws/constructs-go/constructs/v3 v3.4.232 // indirect
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
@@ -26,7 +23,6 @@ require (
 	github.com/cdklabs/awscdk-asset-kubectl-go/kubectlv20/v2 v2.1.2 // indirect
 	github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.0.1 // indirect
 	github.com/fatih/color v1.16.0 // indirect
-	github.com/go-chi/chi/v5 v5.0.11
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
