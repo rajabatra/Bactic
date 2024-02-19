@@ -1,96 +1,74 @@
-<script lang="ts">
-  import {
-    Configuration,
-    DefaultApi,
-    type SearchItem as SearchItemStruct,
-  } from "$lib/api";
-  import SearchItem from "./SearchItem.svelte";
+<script>
+    import { onMount } from "svelte";
+    import SearchBar from "./SearchBar.svelte";
 
-  import { api } from "./store";
+    var filteredAthletes;
+    var inputValue;
 
-  let conf = new Configuration({
-    basePath: "/",
-  });
+    let searchRefresh = false;
+    const filterAthletes = async () => {
+        if (!searchRefresh) {
+            filteredAthletes = await fetch("/api/search/athlete", {
+                method: "GET",
+                body: new URLSearchParams(`name=${inputValue}`),
+            }).then((res) => {
+                return res.body;
+            });
+            searchRefresh = true;
+            setTimeout(() => {
+                searchRefresh = false;
+            }, 1000);
+        }
+    };
 
-  let filteredAthletes: SearchItemStruct[];
-  let inputValue: string;
-
-  let searchRefresh = false;
-  const filterAthletes = async () => {
-    if (!searchRefresh) {
-      filteredAthletes = await api.searchAthleteGet({ name: inputValue });
-      searchRefresh = true;
-      setTimeout(() => {
-        searchRefresh = false;
-      }, 1000);
+    $: if (!inputValue) {
+        filteredAthletes = [];
+    } else {
+        highlightedAthlete = filteredAthletes[highlightedIndex];
     }
-  };
+    let highlightedAthlete;
+    let highlightedIndex;
 
-  $: if (!inputValue) {
-    filteredAthletes = [];
-  } else {
-    highlightedAthlete = filteredAthletes[highlightedIndex];
-  }
-  let highlightedAthlete: SearchItemStruct;
-  let highlightedIndex: number;
+    const submitValue = () => {};
 
-  const submitValue = () => {};
-
-  const statsPages = await api.getAllStatsTests();
+    // a list of stats article summaries that allow us to dynamically render the article list
+    var statsSummeries = Array();
+    onMount(async () => {
+        const response = await fetch("/api/stats/summaries")
+            .then((res) => {
+                statsSummaries = res.json();
+            })
+            .catch((err) => {
+                console.log(err);
+            });
+    });
 </script>
 
-<div class="landing">
-  <section class="search">
-    <form autocomplete="off" on:submit|preventDefault={submitValue}>
-      <div class="autocomplete">
-        <input
-          type="text"
-          id="athlete-input"
-          placeholder="Search athlete, team, division, or conference"
-          bind:value={inputValue}
-          on:input={filterAthletes}
-        />
-      </div>
+<section class="search">
+    <SearchBar />
+</section>
 
-      <input type="submit" />
-
-      {#if filteredAthletes.length > 0}
-        <ul id="autocomplete-items-list">
-          {#each filteredAthletes as athlete, i}
-            <SearchItem item={athlete} highlighted={i === highlightedIndex} />
-          {/each}
-        </ul>
-      {/if}
-    </form>
-  </section>
-  <section class="article-summaries">
-    {#each statsPages as article, i}
-      <StatsArticle />
-    {/each}
-  </section>
-</div>
+<section class="article-summaries">
+    {#each statsSummeries as article, i}{/each}
+</section>
 
 <style>
-  div.autocomplete {
-    position: relative;
-    display: inline-block;
-    width: 300px;
-  }
+    div.autocomplete {
+        position: relative;
+        display: inline-block;
+        width: 300px;
+    }
 
-  input {
-    border: 1px solid transparent;
-    border-radius: 20px;
-    background-color: #f1f1f1;
-    padding: 10px;
-    font-size: 16px;
-    margin: 0;
-  }
+    input {
+        border: 1px solid transparent;
+        border-radius: 20px;
+        background-color: #f1f1f1;
+        padding: 10px;
+        font-size: 16px;
+        margin: 0;
+    }
 
-  .landing {
-    text-align: center;
-  }
-
-  .article-summaries {
-    display: grid;
-  }
+    .article-summaries {
+        display: grid;
+    }
 </style>
