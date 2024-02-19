@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecrassets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
-	"github.com/sethvargo/go-password/password"
 
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -54,10 +53,7 @@ func NewBacticStack(scope constructs.Construct, id string, props *CdkDemoStackPr
 		MemoryMiB:     jsii.String("512"),
 	})
 
-	postgres_pass, err := password.Generate(32, 10, 10, false, true)
-	if err != nil {
-		panic(err)
-	}
+	postgres_pass := "tmp_password"
 
 	dbContainer := dbTask.AddContainer(jsii.String("postgres-bactic"), &awsecs.ContainerDefinitionOptions{
 		Image:          awsecs.AssetImage_FromRegistry(jsii.String("postgres:15.4"), nil),
