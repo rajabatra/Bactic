@@ -3,7 +3,6 @@ package database
 import (
 	"bactic/internal/data"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 
@@ -292,17 +291,39 @@ func GetMissingSchools(tx *sql.Tx, schoolURLs []string) []string {
 }
 
 func getEventHistory(tx *sql.Tx, id uint32) map[data.EventType]data.Result {
-	rows, err := tx.Query(`SELECT pl, quant, wind_ms
+	rows, err := tx.Query(`SELECT pl, quant, wind_ms, heat.event_type
 		FROM result
+		JOIN heat
+		ON result.heat_id = heat.id
 		WHERE result.ath_id = $1`, id)
 	if err != nil {
 		log.Fatalf("error querying event history: %s", err)
 	}
 
+	var (
+		place     uint32
+		quant     float32
+		wind      float32
+		eventType data.EventType
+	)
+
+	history := make(map[data.EventType]data.Result)
+
 	for rows.Next() {
-		rows.
+		rows.Scan(&place, &quant, &wind, &eventType)
+		history[eventType] = data.Result{
+			Place:    place,
+			Quantity: quant,
+			WindMs:   wind,
+		}
 	}
 
+	err = rows.Close()
+	if err != nil {
+		log.Fatalf("could not close rows due to error: %s", err)
+	}
+
+	return history
 }
 
 func GetAthleteSummary(tx *sql.Tx, id uint32) (summary data.AthleteSummary, found bool) {

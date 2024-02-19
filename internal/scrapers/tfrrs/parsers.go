@@ -160,7 +160,7 @@ func parseXCResult(row []htmlElement) (result data.Result, athleteID uint32, sch
 	}
 
 	return data.Result{
-		Place:    int32(place),
+		Place:    uint32(place),
 		Quantity: time,
 	}, athleteID, row[3].link, nil
 }
@@ -186,7 +186,7 @@ func parseDistanceResult(row []htmlElement) (result data.Result, athleteID uint3
 
 	return data.Result{
 		Quantity: time,
-		Place:    int32(place),
+		Place:    uint32(place),
 	}, athleteID, row[3].link, nil
 }
 
@@ -212,7 +212,7 @@ func parseSprintsResult(row []htmlElement) (result data.Result, athleteID uint32
 
 	return data.Result{
 		Quantity: time,
-		Place:    int32(place),
+		Place:    uint32(place),
 	}, athleteID, row[3].link, nil
 }
 

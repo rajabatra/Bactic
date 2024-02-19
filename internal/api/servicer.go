@@ -60,14 +60,10 @@ func (s *APIServicer) StatsAthleteIdGet(ctx context.Context, id uint32) (ImplRes
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("SQL database transaction could not begin")
 	}
-	a, found := database.GetAthlete(tx, id)
-	if !found {
-		return Response(http.StatusNotFound, nil), nil
-	}
 
-	summary, err := database.GetAthleteSummary(tx, id)
-	if err != nil {
-		return Response(http.StatusInternalServerError, nil), err
+	summary, found := database.GetAthleteSummary(tx, id)
+	if !found {
+		return Response(http.StatusNotFound, nil), err
 	}
 
 	return Response(http.StatusOK, summary), nil

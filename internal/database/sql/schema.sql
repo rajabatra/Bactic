@@ -2,10 +2,10 @@ CREATE TABLE IF NOT EXISTS athlete(
     id BIGINT PRIMARY KEY,
     name VARCHAR NOT NULL,
     year INT,
-    zscore FLOAT NOT NULL
+    zscore FLOAT
 );
 
-INSERT INTO athlete(id, name, zscore) VALUES(0, 'NULL', 0) ON CONFLICT DO NOTHING; -- Null for results without an athlete profile
+INSERT INTO athlete(id, name) VALUES(0, 'NULL') ON CONFLICT DO NOTHING; -- Null for results without an athlete profile
 
 CREATE TABLE IF NOT EXISTS meet(
     id BIGINT PRIMARY KEY,

@@ -8,7 +8,7 @@ type Result struct {
 	Id        uint32   `json:"id"`
 	HeatId    uint32   `json:"heat_id"`
 	AthleteId uint32   `json:"athlete_id"`
-	Place     int32    `json:"place"`
+	Place     uint32   `json:"place"`
 	Quantity  float32  `json:"quantity"`
 	WindMs    float32  `json:"wind_ms,omitempty"`
 	Stage     int32    `json:"stage,omitempty"`
