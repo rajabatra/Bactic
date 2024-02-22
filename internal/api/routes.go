@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -41,7 +40,6 @@ func RegisterRoutes(routers ...Router) {
 	for _, api := range routers {
 		for _, route := range api.Routes() {
 			handler := route.HandlerFunc
-			log.Printf("Attaching handler %s to "+route.Method+" "+route.Pattern, handler)
 			http.HandleFunc(route.Method+" "+route.Pattern, handler)
 		}
 	}

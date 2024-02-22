@@ -1,31 +1,50 @@
+<script>
+    import logo from "$lib/assets/logo.png";
+    import SearchBar from "./SearchBar.svelte";
+</script>
+
 <nav>
-    <a href="/" class="bactic-title">BACTIC</a>
-    <!-- <a href="/about">About</a>
-    <a href="/stats">Global Stats</a>
-    <a href="/athlete">Athlete Search</a> -->
+    <a href="/" id="home-button">
+        <h1 id="bactic-title">BACTIC</h1>
+        <img src={logo} alt="Logo" id="bactic-logo" />
+    </a>
+    <SearchBar />
 </nav>
 
 <style>
-    nav {
-        width: 100%;
-        background-color: transparent;
-        align-items: center;
+    @import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap");
+
+    #home-button {
         display: flex;
-        flex-direction: column;
-        z-index: 1;
-        top: 0;
-        left: 0;
-        background-color: #111;
+        flex-direction: row;
+        align-items: center;
+        flex-basis: 40%;
+    }
+    #bactic-title {
+        font-family: "Open Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 2em;
+        margin: 0 0.5rem;
+    }
+
+    #bactic-logo {
+        height: 2em;
+    }
+    nav {
+        display: flex;
+        flex-direction: row;
+        background-color: #4c80b4;
         overflow-x: hidden;
-        padding-top: 20px;
+        align-items: center;
     }
 
     nav a {
-        padding: 6px 8px 6px 16px;
+        padding: 0.3rem 1rem;
         text-decoration: none;
         font-size: 25px;
-        color: #818181;
-        display: block;
+        color: #89d4f3;
+        transition: 0.3s;
     }
 
     nav a:hover {

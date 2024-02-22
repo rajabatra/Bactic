@@ -81,7 +81,7 @@ services:
       context: ../web
       dockerfile: ../build/web/Dockerfile
       target: dev
-    command: ["node", "node_modules/.bin/vite", "dev"]
+    command: ["node", "node_modules/.bin/vite", "dev", "--host"]
     restart: always
     depends_on:
       - api

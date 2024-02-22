@@ -14,7 +14,7 @@
 
 <style>
     .main-content {
-        background-color: rgb(0, 0, 0);
+        background-color: #003b54;
         margin: 0;
     }
     .slot-content {

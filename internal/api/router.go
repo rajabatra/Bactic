@@ -29,27 +29,27 @@ func (c *APIRouter) Routes() Routes {
 		"SearchAthleteGet": Route{
 			HandlerFunc: c.SearchAthleteGet,
 			Method:      "GET",
-			Pattern:     "/api/search/athlete",
+			Pattern:     "/search/athlete",
 		},
 		"StatsAthleteIdGet": Route{
 			HandlerFunc: c.StatsAthleteIdGet,
 			Method:      "GET",
-			Pattern:     "/api/stats/athlete/{id}",
+			Pattern:     "/stats/athlete/{id}",
 		},
 		"StatsHistGet": Route{
 			HandlerFunc: c.StatsHistGet,
 			Method:      "GET",
-			Pattern:     "/api/stats/hist",
+			Pattern:     "/stats/hist",
 		},
 		"StatsTeamIdGet": Route{
 			HandlerFunc: c.StatsTeamIdGet,
 			Method:      "GET",
-			Pattern:     "/api/stats/team/{id}",
+			Pattern:     "/stats/team/{id}",
 		},
 		"StatsTimeseriesGet": Route{
 			HandlerFunc: c.StatsTimeseriesGet,
 			Method:      "GET",
-			Pattern:     "/api/stats/timeseries",
+			Pattern:     "/stats/timeseries",
 		},
 	}
 }
