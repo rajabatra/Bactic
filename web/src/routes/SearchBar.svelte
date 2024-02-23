@@ -3,8 +3,12 @@
 
     var filteredAthletes = Array();
 
-    import { onMount } from "svelte";
-    import SearchBar from "./SearchBar.svelte";
+    // see model_search_item.go
+    const item_to_class = {
+        0: 'athlete',
+        1: 'school',
+        2: 'region',
+    }
 
     var filteredAthletes;
     var inputValue;
@@ -21,7 +25,13 @@
                         method: "GET",
                     },
                 ).then((res) => {
-                    return res.json();
+                    res = res.json();
+                    return res;
+                });
+
+                filteredAthletes.forEach((ath) => {
+                    ath.item_class = item_to_class[ath.item_type];
+                    ath.url = `/${ath.item_class}/${ath.id}`;
                 });
 
                 searchRefresh = true;
@@ -59,9 +69,8 @@
             on:input={filterAthletes}
         />
     </div>
-
     {#if filteredAthletes.length > 0}
-        <ul id="autocomplete-items-list">
+        <ul id="results">
             {#each filteredAthletes as athlete, i}
                 <SearchItem
                     item={athlete}
@@ -77,6 +86,13 @@
         position: relative;
         display: inline-block;
         width: 300px;
+    }
+
+    #results {
+        display: block;
+        position: absolute;
+        background: transparent;
+        margin: 0;
     }
 
     form {

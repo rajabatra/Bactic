@@ -291,7 +291,7 @@ func GetMissingSchools(tx *sql.Tx, schoolURLs []string) []string {
 }
 
 func getEventHistory(tx *sql.Tx, id uint32) map[data.EventType]data.Result {
-	rows, err := tx.Query(`SELECT pl, quant, wind_ms, heat.event_type
+	rows, err := tx.Query(`SELECT result.id, pl, quant, wind_ms, heat.event_type
 		FROM result
 		JOIN heat
 		ON result.heat_id = heat.id
@@ -301,6 +301,7 @@ func getEventHistory(tx *sql.Tx, id uint32) map[data.EventType]data.Result {
 	}
 
 	var (
+		eventId   uint32
 		place     uint32
 		quant     float32
 		wind      float32
@@ -310,8 +311,9 @@ func getEventHistory(tx *sql.Tx, id uint32) map[data.EventType]data.Result {
 	history := make(map[data.EventType]data.Result)
 
 	for rows.Next() {
-		rows.Scan(&place, &quant, &wind, &eventType)
+		rows.Scan(&eventId, &place, &quant, &wind, &eventType)
 		history[eventType] = data.Result{
+			Id:       eventId,
 			Place:    place,
 			Quantity: quant,
 			WindMs:   wind,

@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 )
 
@@ -32,13 +31,12 @@ func NewAPIServicer(dbURI string) *APIServicer {
 
 	var (
 		i     data.SearchItem
-		id    uint32
 		items []data.SearchItem
 	)
 
 	for rows.Next() {
-		rows.Scan(&i.Name, &id)
-		i.Link = fmt.Sprintf("bactic.com/athletes/%d", id)
+		rows.Scan(&i.Name, &i.Id)
+		i.ItemType = 0
 		items = append(items, i)
 	}
 
